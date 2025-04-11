@@ -1,0 +1,6 @@
+=== Basket Analysis Summary ===
+
+=== Overall Statistics ===
+Total data points: 0
+Mean discount/premium: nan
+Standard deviation: nan
