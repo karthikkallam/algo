@@ -49,15 +49,3 @@ wheels/
 activate_env.sh
 __init__.py
 
-# Logs
-logs/
-*.log
-
-# Data files (exclude large data files but keep directory structure)
-data/*.csv
-# Keep an empty .gitkeep file to maintain the directory structure
-!data/.gitkeep
-
-# Profile data
-profiles/*
-!profiles/.gitkeep
