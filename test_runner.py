@@ -4,18 +4,16 @@ from trader import Trader # Import your Trader class
 import time # To measure execution time
 
 # --- Configuration ---
-# IMPORTANT: Update these filenames to match your downloaded sample data
-ORDER_BOOK_CSV_PATH = 'data/prices_round_2_day_0.csv'
-# TRADE_CSV_PATH = 'data/YOUR_SAMPLE_TRADE_DATA.csv' # Optional, if needed for FV calc
+# Update with correct file paths based on your directory structure
+DATA_DIR = 'data/'
+ORDER_BOOK_CSV_PATH = DATA_DIR + 'prices_round_2_day_0.csv'  # Change day number as needed
+TRADE_CSV_PATH = DATA_DIR + 'trades_round_2_day_0.csv'       # Change day number as needed
 
 # --- Helper Function to Parse Order Book Data ---
-# IMPORTANT: This function MUST be adapted based on your CSV format.
-#            Inspect your CSV columns carefully.
-# Example assumption: CSV has columns like 'timestamp', 'product', 'bid_price_1', 'bid_volume_1', 'ask_price_1', 'ask_volume_1', etc.
 def parse_order_depth_from_row(row, product: str) -> OrderDepth:
     depth = OrderDepth()
-    # Example: Assuming up to 3 levels of depth provided
-    for i in range(1, 4): # Adjust range based on CSV columns
+    # Parse up to 3 levels of depth provided
+    for i in range(1, 4):
         bid_price_col = f'bid_price_{i}'
         bid_vol_col = f'bid_volume_{i}'
         ask_price_col = f'ask_price_{i}'
@@ -25,9 +23,9 @@ def parse_order_depth_from_row(row, product: str) -> OrderDepth:
             depth.buy_orders[int(row[bid_price_col])] = int(row[bid_vol_col])
         if ask_price_col in row and pd.notna(row[ask_price_col]) and row[ask_vol_col] > 0:
             # Remember sell orders use negative quantity in datamodel
-            depth.sell_orders[int(row[ask_price_col])] = -int(row[ask_vol_col]) 
+            depth.sell_orders[int(row[ask_price_col])] = -int(row[ask_vol_col])
             
-    # Ensure bids are sorted high to low, asks low to high (optional, good practice)
+    # Ensure bids are sorted high to low, asks low to high
     depth.buy_orders = dict(sorted(depth.buy_orders.items(), reverse=True))
     depth.sell_orders = dict(sorted(depth.sell_orders.items()))
     return depth
@@ -36,6 +34,7 @@ def parse_order_depth_from_row(row, product: str) -> OrderDepth:
 def run_simulation():
     print(f"Loading data from {ORDER_BOOK_CSV_PATH}...")
     try:
+        # Use semicolon as delimiter based on your data file format
         market_data_df = pd.read_csv(ORDER_BOOK_CSV_PATH, delimiter=';')
         print(f"Data loaded. Columns: {market_data_df.columns.tolist()}")
     except FileNotFoundError:
@@ -76,20 +75,15 @@ def run_simulation():
                  listings[product] = Listing(symbol=product, product=product, denomination="SEASHELLS")
                  order_depths[product] = parse_order_depth_from_row(row, product)
              else:
-                  # Handle cases where a product might not have data at a specific timestamp if needed
+                  # Handle cases where a product might not have data at a specific timestamp
                   listings[product] = Listing(symbol=product, product=product, denomination="SEASHELLS")
                   order_depths[product] = OrderDepth() # Empty book
 
-
-        # TODO: Populate market_trades and own_trades if your strategy uses them
-        #       This would likely involve processing the separate trade CSV or
-        #       simulating fills based on orders from the *previous* iteration.
-        #       For simplicity, starting with empty trade lists.
+        # Initialize empty trade lists
         own_trades = {p: [] for p in products}
         market_trades = {p: [] for p in products}
 
-        # TODO: Populate observations if needed for specific strategies
-        #       This might require additional columns in your sample data or assumptions
+        # Create empty observations
         observations = Observation(plainValueObservations={}, conversionObservations={})
 
         # Create the state object
@@ -114,27 +108,21 @@ def run_simulation():
             if duration > 900:
                 print("WARNING: Execution time exceeded 900ms!")
 
-            # --- Process Results (Simplified) ---
-            # In a real backtest, you would simulate order fills here based on
-            # the 'result' orders and the 'order_depths' of the *next* timestamp
-            # and update 'current_positions' and calculate PnL.
-            # For now, just print the intended orders.
+            # Print intended orders and conversions
             print(f"Intended Orders: {result}")
             print(f"Intended Conversions: {conversions}")
 
-            # Basic position update (assuming orders fill immediately for simplicity - NOT ACCURATE FOR MM)
-            # A proper backtest needs careful fill simulation!
+            # Basic position update (simplified)
             for product, orders in result.items():
                  for order in orders:
-                      # This is a VERY rough approximation, only counts intended change
                       current_positions[product] = current_positions.get(product, 0) + order.quantity
                       
-            print(f"Approx Updated Positions (Ignoring Fills): {current_positions}")
-
+            print(f"Approx Updated Positions: {current_positions}")
 
         except Exception as e:
             print(f"ERROR during trader.run() at timestamp {ts}: {e}")
-            # Optionally break the loop or handle error recovery
+            import traceback
+            traceback.print_exc()
             break # Stop simulation on error
 
     print("\n--- Simulation Finished ---")

@@ -22,7 +22,7 @@ DATAMODEL_FILE_ORIGINAL = "datamodel.py"
 STORAGE_DB = "sqlite:///prosperity3_round2_optimization.db"
 STUDY_NAME = "prosperity3-round2-optimizer"
 N_TRIALS = 50  # Number of trials to run (adjust as needed)
-ROUNDS_TO_TEST = ["1", "2"]  # List of round days to test (e.g., ["0", "1"])
+ROUNDS_TO_TEST = ["2"]  # Only test Round 2
 PARALLEL_JOBS = 1  # Set to >1 if your system supports parallel execution
 
 # --- Product-Specific Configurations ---

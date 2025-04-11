@@ -1,5 +1,6 @@
 # Optimized trader.py for IMC Prosperity 3 - Round 2
 
+import pandas as pd
 import json
 from typing import Dict, List, Any, Tuple
 import jsonpickle
@@ -16,6 +17,30 @@ class Logger:
         self.logs = ""
         self.max_log_length = 3750 # Slightly reduced from example for safety margin
 
+    DATA_DIR = 'data/'
+    ORDER_BOOK_CSV_PATH = DATA_DIR + 'prices_round_2_day_0.csv'  # Change day number as needed
+    TRADE_CSV_PATH = DATA_DIR + 'trades_round_2_day_0.csv'       # Change day number as needed
+
+    # --- Helper Function to Parse Order Book Data ---
+    def parse_order_depth_from_row(row, product: str) -> OrderDepth:
+        depth = OrderDepth()
+        # Parse up to 3 levels of depth provided
+        for i in range(1, 4):
+            bid_price_col = f'bid_price_{i}'
+            bid_vol_col = f'bid_volume_{i}'
+            ask_price_col = f'ask_price_{i}'
+            ask_vol_col = f'ask_volume_{i}'
+
+            if bid_price_col in row and pd.notna(row[bid_price_col]) and row[bid_vol_col] > 0:
+                depth.buy_orders[int(row[bid_price_col])] = int(row[bid_vol_col])
+            if ask_price_col in row and pd.notna(row[ask_price_col]) and row[ask_vol_col] > 0:
+                # Remember sell orders use negative quantity in datamodel
+                depth.sell_orders[int(row[ask_price_col])] = -int(row[ask_vol_col])
+                
+        # Ensure bids are sorted high to low, asks low to high
+        depth.buy_orders = dict(sorted(depth.buy_orders.items(), reverse=True))
+        depth.sell_orders = dict(sorted(depth.sell_orders.items()))
+        return depth
     def print(self, *objects: Any, sep: str = " ", end: str = "\n") -> None:
         # Appends logs to an internal buffer; limit checked during flush
         self.logs += sep.join(map(str, objects)) + end
@@ -170,75 +195,75 @@ BASKET_CONTENTS = {
 # --- Tunable Parameters ---
 PARAMS = {
     "shared": {
-        "take_profit_threshold": 0.4,
-        "max_history_length": 90,
-        "arbitrage_threshold": 1.0,  # Minimum profit to attempt basket arbitrage
-        "conversion_threshold": 1.0  # Minimum profit to attempt basket conversion
+        "take_profit_threshold": 0.8500000000000001,
+        "max_history_length": 120,
+        "arbitrage_threshold": 3.8000000000000003,
+        "conversion_threshold": 3.2
     },
     "RAINFOREST_RESIN": {
-        "fair_value_anchor": 10000.0,
-        "anchor_blend_alpha": 0.08,
-        "min_spread": 7,
-        "volatility_spread_factor": 0.32,
-        "inventory_skew_factor": 0.01,
-        "base_order_qty": 25,
-        "reversion_threshold": 2
+        "fair_value_anchor": 9860.0,
+        "anchor_blend_alpha": 0.07,
+        "min_spread": 5,
+        "volatility_spread_factor": 0.55,
+        "inventory_skew_factor": 0.018000000000000002,
+        "base_order_qty": 29,
+        "reversion_threshold": 1
     },
     "KELP": {
-        "ema_alpha": 0.05,
-        "min_spread": 2,
-        "volatility_spread_factor": 1.2,
-        "inventory_skew_factor": 0.015,
-        "base_order_qty": 28,
-        "min_volatility_qty_factor": 1.1,
-        "max_volatility_for_qty_reduction": 4.0,
+        "ema_alpha": 0.19999999999999998,
+        "min_spread": 4,
+        "volatility_spread_factor": 0.9,
+        "inventory_skew_factor": 0.009000000000000001,
+        "base_order_qty": 19,
+        "min_volatility_qty_factor": 1.3,
+        "max_volatility_for_qty_reduction": 5.0,
         "imbalance_depth": 5,
-        "imbalance_fv_adjustment_factor": 0.36
+        "imbalance_fv_adjustment_factor": 0.35000000000000003
     },
     "CROISSANT": {
-        "ema_alpha": 0.1,
-        "min_spread": 2,
-        "volatility_spread_factor": 0.8,
-        "inventory_skew_factor": 0.005,
-        "base_order_qty": 50,
-        "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.3
+        "ema_alpha": 0.14,
+        "min_spread": 1,
+        "volatility_spread_factor": 0.6000000000000001,
+        "inventory_skew_factor": 0.004,
+        "base_order_qty": 55,
+        "imbalance_depth": 5,
+        "imbalance_fv_adjustment_factor": 0.15000000000000002
     },
     "JAM": {
-        "ema_alpha": 0.08,
-        "min_spread": 1,
-        "volatility_spread_factor": 0.7,
-        "inventory_skew_factor": 0.004,
-        "base_order_qty": 60,
-        "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.25
+        "ema_alpha": 0.13,
+        "min_spread": 3,
+        "volatility_spread_factor": 0.3,
+        "inventory_skew_factor": 0.007,
+        "base_order_qty": 50,
+        "imbalance_depth": 2,
+        "imbalance_fv_adjustment_factor": 0.5
     },
     "DJEMBE": {
-        "ema_alpha": 0.04,
-        "min_spread": 3,
-        "volatility_spread_factor": 1.0,
-        "inventory_skew_factor": 0.02,
-        "base_order_qty": 10,
+        "ema_alpha": 0.1,
+        "min_spread": 6,
+        "volatility_spread_factor": 0.9,
+        "inventory_skew_factor": 0.012,
+        "base_order_qty": 15,
         "imbalance_depth": 4,
-        "imbalance_fv_adjustment_factor": 0.4
+        "imbalance_fv_adjustment_factor": 0.25
     },
     "PICNIC_BASKET1": {
-        "ema_alpha": 0.05,
-        "min_spread": 5,
-        "volatility_spread_factor": 0.9,
-        "inventory_skew_factor": 0.015,
-        "base_order_qty": 12,
-        "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.3
+        "ema_alpha": 0.06,
+        "min_spread": 3,
+        "volatility_spread_factor": 1.5,
+        "inventory_skew_factor": 0.01,
+        "base_order_qty": 16,
+        "imbalance_depth": 2,
+        "imbalance_fv_adjustment_factor": 0.30000000000000004
     },
     "PICNIC_BASKET2": {
         "ema_alpha": 0.06,
-        "min_spread": 4,
-        "volatility_spread_factor": 0.85,
-        "inventory_skew_factor": 0.01,
-        "base_order_qty": 20,
-        "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.25
+        "min_spread": 3,
+        "volatility_spread_factor": 1.5,
+        "inventory_skew_factor": 0.021,
+        "base_order_qty": 29,
+        "imbalance_depth": 4,
+        "imbalance_fv_adjustment_factor": 0.35
     }
 }
 
@@ -604,7 +629,7 @@ class Trader:
                             logger.print(f"ARBITRAGE: BUY {buy_qty}x{comp} @ {comp_best_ask}")
         
         return arbitrage_orders
-    
+
     def handle_conversions(self, state: TradingState) -> int:
         """Handle basket conversions based on positions and theoretical values."""
         state_dict = self.deserialize_state(state.traderData)
