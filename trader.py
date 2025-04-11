@@ -1,7 +1,8 @@
 # Optimized trader.py for Tutorial Round - V3 (Visualizer Logging Integrated)
 
 import json
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional, Union
+from typing_extensions import TypedDict
 import jsonpickle
 import numpy as np
 import math
@@ -22,38 +23,51 @@ class Logger:
         # Appends logs to an internal buffer; limit checked during flush
         self.logs += sep.join(map(str, objects)) + end
 
-    def flush(self, state: TradingState, orders: dict[Symbol, list[Order]], conversions: int, trader_data: str) -> None:
-        # Calculate base length without large variable data
-        compressed_state_base = [state.timestamp, "", self.compress_listings(state.listings), self.compress_order_depths(state.order_depths), self.compress_trades(state.own_trades), self.compress_trades(state.market_trades), state.position, self.compress_observations(state.observations)]
-        base_json_part = self.to_json([compressed_state_base, self.compress_orders(orders), conversions, "", ""]) # Empty strings for traderData and logs
-        base_length = len(base_json_part) - 4 # Account for the 4 empty strings "" we used as placeholders
+    def flush(self, state: TradingState, orders: Dict[Symbol, List[Order]], conversions: int, trader_data: str) -> None:
+        try:
+            # Convert numpy types to Python native types for JSON serialization
+            timestamp = int(state.timestamp) if hasattr(state.timestamp, "item") else state.timestamp
+            # Calculate base length without large variable data
+            compressed_state_base = [timestamp, "", self.compress_listings(state.listings), self.compress_order_depths(state.order_depths), self.compress_trades(state.own_trades), self.compress_trades(state.market_trades), state.position, self.compress_observations(state.observations)]
+            base_json_part = self.to_json([compressed_state_base, self.compress_orders(orders), conversions, "", ""]) # Empty strings for traderData and logs
+            base_length = len(base_json_part) - 4 # Account for the 4 empty strings "" we used as placeholders
+        except Exception as e:
+            # Log the error but continue with minimal data to avoid crashing
+            self.logs += f"Error in flush preparation: {e}\n"
+            base_length = 0  # Set a minimal length
 
         # Calculate remaining length and divide by 3 for the variable parts
         available_length = self.max_log_length - base_length
         max_item_length = available_length // 3
         if max_item_length < 0: max_item_length = 0 # Ensure non-negative length
 
-        # Prepare the final list with potentially truncated data
-        log_entry = [
-            self.compress_state(state, self.truncate(state.traderData, max_item_length)), # Compress state with potentially truncated internal traderData
-            self.compress_orders(orders),
-            conversions,
-            self.truncate(trader_data, max_item_length), # Use potentially truncated output trader_data
-            self.truncate(self.logs, max_item_length)    # Use potentially truncated custom logs
-        ]
+        try:
+            # Prepare the final list with potentially truncated data
+            log_entry = [
+                self.compress_state(state, self.truncate(state.traderData, max_item_length)), # Compress state with potentially truncated internal traderData
+                self.compress_orders(orders),
+                conversions,
+                self.truncate(trader_data, max_item_length), # Use potentially truncated output trader_data
+                self.truncate(self.logs, max_item_length)    # Use potentially truncated custom logs
+            ]
 
-        # Print the single JSON line for this iteration
-        print(self.to_json(log_entry))
+            # Print the single JSON line for this iteration
+            print(self.to_json(log_entry))
+        except Exception as e:
+            # If we can't create the log entry, at least print a basic error message
+            print(f"ERROR in logger.flush: {e}")
 
         # Reset internal log buffer for the next iteration
         self.logs = ""
 
     # --- Compression Methods (Copied from Logger Prerequisites) ---
-    def compress_state(self, state: TradingState, trader_data: str) -> list[Any]:
+    def compress_state(self, state: TradingState, trader_data: str) -> List[Any]:
         # Ensure observations exist, create empty if not
         obs = state.observations if state.observations else Observation({}, {})
+        # Convert timestamp to int if it's a numpy integer type
+        timestamp = int(state.timestamp) if hasattr(state.timestamp, "item") else state.timestamp
         return [
-            state.timestamp,
+            timestamp,
             trader_data, # Use the (potentially truncated) trader_data passed in
             self.compress_listings(state.listings),
             self.compress_order_depths(state.order_depths),
@@ -63,7 +77,7 @@ class Logger:
             self.compress_observations(obs), # Use ensured Observation object
         ]
 
-    def compress_listings(self, listings: dict[Symbol, Listing]) -> list[list[Any]]:
+    def compress_listings(self, listings: Dict[Symbol, Listing]) -> List[List[Any]]:
         compressed = []
         # Handle cases where listings might be None or empty
         if listings:
@@ -71,7 +85,7 @@ class Logger:
                 compressed.append([listing.symbol, listing.product, listing.denomination])
         return compressed
 
-    def compress_order_depths(self, order_depths: dict[Symbol, OrderDepth]) -> dict[Symbol, list[Any]]:
+    def compress_order_depths(self, order_depths: Dict[Symbol, OrderDepth]) -> Dict[Symbol, List[Any]]:
         compressed = {}
         if order_depths:
             for symbol, order_depth in order_depths.items():
@@ -81,7 +95,7 @@ class Logger:
                 compressed[symbol] = [buy_orders, sell_orders]
         return compressed
 
-    def compress_trades(self, trades: dict[Symbol, list[Trade]]) -> list[list[Any]]:
+    def compress_trades(self, trades: Dict[Symbol, List[Trade]]) -> List[List[Any]]:
         compressed = []
         if trades:
             for arr in trades.values():
@@ -102,7 +116,7 @@ class Logger:
                              )
         return compressed
 
-    def compress_observations(self, observations: Observation) -> list[Any]:
+    def compress_observations(self, observations: Observation) -> List[Any]:
          # Ensure nested dictionaries exist within the Observation object
          plain_obs = observations.plainValueObservations if hasattr(observations, 'plainValueObservations') and observations.plainValueObservations else {}
          conv_obs_orig = observations.conversionObservations if hasattr(observations, 'conversionObservations') and observations.conversionObservations else {}
@@ -120,14 +134,14 @@ class Logger:
                          getattr(observation, 'exportTariff', 0),
                          getattr(observation, 'importTariff', 0),
                          # Use getattr for potentially missing attributes with default 0
-                         getattr(observation, 'sunlight', 0), # Adjusted field name based on datamodel
-                         getattr(observation, 'humidity', 0), # Adjusted field name based on datamodel
+                         getattr(observation, 'sugarPrice', 0), # Correct field name from datamodel
+                         getattr(observation, 'sunlightIndex', 0), # Correct field name from datamodel
                      ]
 
          return [plain_obs, conversion_observations_compressed]
 
 
-    def compress_orders(self, orders: dict[Symbol, list[Order]]) -> list[list[Any]]:
+    def compress_orders(self, orders: Dict[Symbol, List[Order]]) -> List[List[Any]]:
         compressed = []
         if orders:
             for arr in orders.values():
@@ -153,36 +167,101 @@ class Logger:
 # Create a global instance of the logger
 logger = Logger()
 
-# --- Tunable Parameters (Using V3/V1 reverted values) ---
+# --- Tunable Parameters (Expanded for Round 2) ---
 PARAMS = {
     "shared": {
-        "take_profit_threshold": 0.4, # Reverted: More aggressive sniping
-        "max_history_length": 90 # Reverted: Longer history for smoother stats
+        "take_profit_threshold": 0.4, # Threshold for sniping trades
+        "max_history_length": 90,     # History window for stats calculation
+        "arbitrage_threshold": 2.0,   # Threshold for basket arbitrage
+        "conversion_threshold": 2.0   # Threshold for conversion trades
     },
     "RAINFOREST_RESIN": {
         "fair_value_anchor": 10000.0,
-        "anchor_blend_alpha": 0.08, # Reverted: Less weight on market WMP/EMA
-        "min_spread": 7, #
-        "volatility_spread_factor": 0.32, # Reverted: V1 value
-        "inventory_skew_factor": 0.01, # Reverted: V1 value
-        "base_order_qty": 25,      # Reverted: V1 value
-        "reversion_threshold": 2   # Reverted: V1 value
+        "anchor_blend_alpha": 0.08,
+        "min_spread": 7,
+        "volatility_spread_factor": 0.32,
+        "inventory_skew_factor": 0.01,
+        "base_order_qty": 25,
+        "reversion_threshold": 2
     },
     "KELP": {
-        "ema_alpha": 0.05,          # Reverted: Slower EMA
+        "ema_alpha": 0.05,
         "min_spread": 2,
-        "volatility_spread_factor": 1.2, # Reverted: Higher sensitivity
-        "inventory_skew_factor": 0.015,  # Reverted: Higher skew sensitivity
-        "base_order_qty": 28,        # Reverted: Smaller base qty
-        "min_volatility_qty_factor": 1.1, # Reverted: Less aggressive qty reduction
-        "max_volatility_for_qty_reduction": 4.0, # Reverted
+        "volatility_spread_factor": 1.2,
+        "inventory_skew_factor": 0.015,
+        "base_order_qty": 28,
+        "min_volatility_qty_factor": 1.1,
+        "max_volatility_for_qty_reduction": 4.0,
         "imbalance_depth": 5,
-        "imbalance_fv_adjustment_factor": 0.36 # Reverted
+        "imbalance_fv_adjustment_factor": 0.36
+    },
+    "CROISSANTS": {
+        "ema_alpha": 0.1,
+        "min_spread": 1,
+        "volatility_spread_factor": 0.7,
+        "inventory_skew_factor": 0.005,
+        "base_order_qty": 50,
+        "imbalance_depth": 3,
+        "imbalance_fv_adjustment_factor": 0.2
+    },
+    "JAMS": {
+        "ema_alpha": 0.1,
+        "min_spread": 1,
+        "volatility_spread_factor": 0.7,
+        "inventory_skew_factor": 0.005,
+        "base_order_qty": 40,
+        "imbalance_depth": 3,
+        "imbalance_fv_adjustment_factor": 0.2
+    },
+    "DJEMBES": {
+        "ema_alpha": 0.05,
+        "min_spread": 3,
+        "volatility_spread_factor": 1.0,
+        "inventory_skew_factor": 0.02,
+        "base_order_qty": 10,
+        "imbalance_depth": 3,
+        "imbalance_fv_adjustment_factor": 0.3
+    },
+    "SQUID_INK": {
+        "ema_alpha": 0.05,
+        "min_spread": 2,
+        "volatility_spread_factor": 0.8,
+        "inventory_skew_factor": 0.01,
+        "base_order_qty": 20,
+        "imbalance_depth": 3,
+        "imbalance_fv_adjustment_factor": 0.25
+    },
+    "PICNIC_BASKET1": {
+        "ema_alpha": 0.05,
+        "min_spread": 5,
+        "volatility_spread_factor": 0.8,
+        "inventory_skew_factor": 0.015,
+        "base_order_qty": 15,
+        "imbalance_depth": 3,
+        "imbalance_fv_adjustment_factor": 0.25
+    },
+    "PICNIC_BASKET2": {
+        "ema_alpha": 0.05,
+        "min_spread": 5,
+        "volatility_spread_factor": 0.8,
+        "inventory_skew_factor": 0.015,
+        "base_order_qty": 15,
+        "imbalance_depth": 3,
+        "imbalance_fv_adjustment_factor": 0.25
     }
 }
 
-# Tutorial Round Position Limits
-POSITION_LIMITS = {'RAINFOREST_RESIN': 50, 'KELP': 50}
+# Round 2 Position Limits
+POSITION_LIMITS = {
+    'RAINFOREST_RESIN': 150,
+    'KELP': 300,
+    'CROISSANTS': 600,
+    'JAMS': 500,
+    'DJEMBES': 50,
+    'SQUID_INK': 250,
+    'PICNIC_BASKET1': 60,
+    'PICNIC_BASKET2': 80
+}
 
 class Trader:
 
@@ -240,7 +319,7 @@ class Trader:
     #      calculate_fair_value unchanged from the previous V3 code) ...
 
     # Make sure helper methods are correctly indented within the Trader class
-    def calculate_weighted_mid_price(self, order_depth: OrderDepth) -> float | None:
+    def calculate_weighted_mid_price(self, order_depth: OrderDepth) -> Optional[float]:
         # (Same implementation as V3)
         if not order_depth.sell_orders or not order_depth.buy_orders: return None
         sorted_bids = sorted(order_depth.buy_orders.items(), reverse=True)
@@ -272,7 +351,7 @@ class Trader:
         else:
             state_dict["ema_prices"][product] = alpha * current_value + (1 - alpha) * state_dict["ema_prices"][product]
 
-    def update_history_and_stats(self, product: str, current_wmp: float | None, state_dict: Dict[str, Any]):
+    def update_history_and_stats(self, product: str, current_wmp: Optional[float], state_dict: Dict[str, Any]):
          # (Same implementation as V3)
         state_dict.setdefault("price_history", {}).setdefault(product, [])
         state_dict.setdefault("std_devs", {}).setdefault(product, 0.0)
@@ -300,9 +379,11 @@ class Trader:
              state_dict["std_devs"][product] = last_std_dev
 
 
-    def calculate_fair_value(self, product: str, wmp: float | None, order_depth: OrderDepth, state_dict: Dict[str, Any]) -> float | None:
-         # (Same implementation as V3)
-        params = PARAMS[product]
+    def calculate_fair_value(self, product: str, wmp: Optional[float], order_depth: OrderDepth, state_dict: Dict[str, Any]) -> Optional[float]:
+         # (Modified to handle more products)
+        # Default to Kelp-like parameters if specific product params not found
+        params = PARAMS.get(product, PARAMS.get('KELP', {}))
+        
         state_dict.setdefault("ema_prices", {}).setdefault(product, None)
         state_dict.setdefault("fair_values", {}).setdefault(product, None)
         state_dict.setdefault("last_wmp", {}).setdefault(product, None)
@@ -322,24 +403,28 @@ class Trader:
              logger.print(f"CRITICAL WARNING: Cannot determine price point for {product}. Skipping FV calc.") # Use logger
              return None
 
-        fair_value = None
+        # Calculate fair value based on product
         if product == 'RAINFOREST_RESIN':
-             anchor = params["fair_value_anchor"]
-             alpha = params["anchor_blend_alpha"]
+             # Anchor-based resin fair value
+             anchor = params.get("fair_value_anchor", 10000.0)
+             alpha = params.get("anchor_blend_alpha", 0.08)
              fair_value = alpha * current_price_point + (1 - alpha) * anchor
-        elif product == 'KELP':
-            self.update_ema(current_price_point, product, state_dict, params["ema_alpha"])
-            fair_value = state_dict["ema_prices"][product]
-            imbalance = self.calculate_order_book_imbalance(order_depth, params["imbalance_depth"])
-            std_dev = state_dict["std_devs"].get(product, 0.0)
-            safe_std_dev = max(std_dev, 0.1)
-            spread_guess = max(params["min_spread"], round(safe_std_dev * params["volatility_spread_factor"]))
-            spread_guess = min(spread_guess, 10)
-            adj_factor = params["imbalance_fv_adjustment_factor"]
-            fv_adjustment = imbalance * adj_factor * spread_guess
-            fair_value += fv_adjustment
         else:
-            fair_value = current_price_point
+            # All other products use EMA-based fair value with optional imbalance adjustment
+            ema_alpha = params.get("ema_alpha", 0.05)  # Default EMA alpha if not found
+            self.update_ema(current_price_point, product, state_dict, ema_alpha)
+            fair_value = state_dict["ema_prices"][product]
+            
+            # Add order book imbalance adjustment if parameters are available
+            if "imbalance_depth" in params and "imbalance_fv_adjustment_factor" in params:
+                imbalance = self.calculate_order_book_imbalance(order_depth, params["imbalance_depth"])
+                std_dev = state_dict["std_devs"].get(product, 0.0)
+                safe_std_dev = max(std_dev, 0.1)
+                spread_guess = max(params.get("min_spread", 2), round(safe_std_dev * params.get("volatility_spread_factor", 1.0)))
+                spread_guess = min(spread_guess, 10)
+                adj_factor = params["imbalance_fv_adjustment_factor"]
+                fv_adjustment = imbalance * adj_factor * spread_guess
+                fair_value += fv_adjustment
 
         state_dict["fair_values"][product] = fair_value
         return fair_value
@@ -347,100 +432,113 @@ class Trader:
 
     def manage_orders(self, product: str, position: int, limit: int, fair_value: float, std_dev: float, order_depth: OrderDepth, state_dict: Dict[str, Any]) -> List[Order]:
         """Generates orders using product-specific logic and parameters."""
-        # (This is the core trading logic from V3 - **replace `print` with `logger.print`**)
-        params = PARAMS[product]
+        # Get parameters for this product (default to KELP if missing)
+        params = PARAMS.get(product, PARAMS.get('KELP', {}))
         orders: List[Order] = []
         buy_room = limit - position
         sell_room = limit + position
 
-        current_base_qty = params["base_order_qty"]
-        if product == 'KELP':
-             volatility = std_dev
-             max_vol = params["max_volatility_for_qty_reduction"]
-             min_qty_factor = params["min_volatility_qty_factor"]
-             if max_vol > 0 and volatility > 0:
-                  qty_factor = max(min_qty_factor, 1.0 - (volatility / max_vol) * (1.0 - min_qty_factor) )
-                  current_base_qty = max(1, round(params["base_order_qty"] * qty_factor))
+        # Get base order quantity with optional volatility adjustment
+        current_base_qty = params.get("base_order_qty", 10)  # Default if missing
+        
+        # Apply volatility-based quantity reduction if parameters are available
+        if "max_volatility_for_qty_reduction" in params and "min_volatility_qty_factor" in params:
+            volatility = std_dev
+            max_vol = params["max_volatility_for_qty_reduction"]
+            min_qty_factor = params["min_volatility_qty_factor"]
+            if max_vol > 0 and volatility > 0:
+                qty_factor = max(min_qty_factor, 1.0 - (volatility / max_vol) * (1.0 - min_qty_factor))
+                current_base_qty = max(1, round(params["base_order_qty"] * qty_factor))
 
-        take_profit_threshold = PARAMS["shared"]["take_profit_threshold"]
+        # Get shared parameters with defaults
+        take_profit_threshold = PARAMS.get("shared", {}).get("take_profit_threshold", 0.4)
         orders_to_add: List[Order] = []
 
+        # Snipe underpriced asks
         if order_depth.sell_orders and buy_room > 0:
             best_ask = min(order_depth.sell_orders.keys())
             if best_ask < fair_value - take_profit_threshold:
                 best_ask_vol = abs(order_depth.sell_orders[best_ask])
                 qty_to_buy = min(best_ask_vol, buy_room)
                 if qty_to_buy > 0:
-                    logger.print(f"SNIPE BUY {product}: {qty_to_buy}x{best_ask} (FV: {fair_value:.2f})") # Use logger
+                    logger.print(f"SNIPE BUY {product}: {qty_to_buy}x{best_ask} (FV: {fair_value:.2f})")
                     orders_to_add.append(Order(product, best_ask, qty_to_buy))
                     buy_room -= qty_to_buy
 
+        # Snipe overpriced bids
         if order_depth.buy_orders and sell_room > 0:
-             best_bid = max(order_depth.buy_orders.keys())
-             if best_bid > fair_value + take_profit_threshold:
+            best_bid = max(order_depth.buy_orders.keys())
+            if best_bid > fair_value + take_profit_threshold:
                 best_bid_vol = order_depth.buy_orders[best_bid]
                 qty_to_sell = min(best_bid_vol, sell_room)
                 if qty_to_sell > 0:
-                    logger.print(f"SNIPE SELL {product}: {qty_to_sell}x{best_bid} (FV: {fair_value:.2f})") # Use logger
+                    logger.print(f"SNIPE SELL {product}: {qty_to_sell}x{best_bid} (FV: {fair_value:.2f})")
                     orders_to_add.append(Order(product, best_bid, -qty_to_sell))
                     sell_room -= qty_to_sell
 
         orders.extend(orders_to_add)
 
+        # For RAINFOREST_RESIN, apply mean reversion trading around anchor
         reversion_buy_price = None
         reversion_sell_price = None
-        if product == 'RAINFOREST_RESIN':
-             anchor = params['fair_value_anchor']
-             reversion_threshold = params.get('reversion_threshold', 2)
+        if product == 'RAINFOREST_RESIN' and 'fair_value_anchor' in params:
+            anchor = params['fair_value_anchor']
+            reversion_threshold = params.get('reversion_threshold', 2)
 
-             if order_depth.sell_orders and buy_room > 0:
-                  best_ask = min(order_depth.sell_orders.keys())
-                  if best_ask < anchor - reversion_threshold and not any(o.price == best_ask and o.quantity > 0 for o in orders):
-                       qty_to_buy = min(abs(order_depth.sell_orders[best_ask]), buy_room)
-                       if qty_to_buy > 0:
-                            logger.print(f"MEAN REVERT BUY {product}: {qty_to_buy}x{best_ask} (Anchor: {anchor})") # Use logger
-                            orders.append(Order(product, best_ask, qty_to_buy))
-                            buy_room -= qty_to_buy
-                            reversion_buy_price = best_ask
+            if order_depth.sell_orders and buy_room > 0:
+                best_ask = min(order_depth.sell_orders.keys())
+                if best_ask < anchor - reversion_threshold and not any(o.price == best_ask and o.quantity > 0 for o in orders):
+                    qty_to_buy = min(abs(order_depth.sell_orders[best_ask]), buy_room)
+                    if qty_to_buy > 0:
+                        logger.print(f"MEAN REVERT BUY {product}: {qty_to_buy}x{best_ask} (Anchor: {anchor})")
+                        orders.append(Order(product, best_ask, qty_to_buy))
+                        buy_room -= qty_to_buy
+                        reversion_buy_price = best_ask
 
-             if order_depth.buy_orders and sell_room > 0:
-                  best_bid = max(order_depth.buy_orders.keys())
-                  if best_bid > anchor + reversion_threshold and not any(o.price == best_bid and o.quantity < 0 for o in orders):
-                       qty_to_sell = min(order_depth.buy_orders[best_bid], sell_room)
-                       if qty_to_sell > 0:
-                            logger.print(f"MEAN REVERT SELL {product}: {qty_to_sell}x{best_bid} (Anchor: {anchor})") # Use logger
-                            orders.append(Order(product, best_bid, -qty_to_sell))
-                            sell_room -= qty_to_sell
-                            reversion_sell_price = best_bid
+            if order_depth.buy_orders and sell_room > 0:
+                best_bid = max(order_depth.buy_orders.keys())
+                if best_bid > anchor + reversion_threshold and not any(o.price == best_bid and o.quantity < 0 for o in orders):
+                    qty_to_sell = min(order_depth.buy_orders[best_bid], sell_room)
+                    if qty_to_sell > 0:
+                        logger.print(f"MEAN REVERT SELL {product}: {qty_to_sell}x{best_bid} (Anchor: {anchor})")
+                        orders.append(Order(product, best_bid, -qty_to_sell))
+                        sell_room -= qty_to_sell
+                        reversion_sell_price = best_bid
 
-        min_spread = params["min_spread"]
+        # Calculate spread based on volatility
+        min_spread = params.get("min_spread", 2)  # Default if missing
         safe_std_dev = max(std_dev, 0.1)
-        vol_spread = round(safe_std_dev * params["volatility_spread_factor"])
+        vol_spread = round(safe_std_dev * params.get("volatility_spread_factor", 1.0))
         dynamic_spread = max(min_spread, vol_spread)
         dynamic_spread = min(dynamic_spread, 10)
-        inventory_skew = round(position * params["inventory_skew_factor"])
+        
+        # Apply inventory skew
+        inventory_skew = round(position * params.get("inventory_skew_factor", 0.01))
         target_bid = fair_value - (dynamic_spread / 2.0) - inventory_skew
         target_ask = fair_value + (dynamic_spread / 2.0) - inventory_skew
         target_ask = max(target_ask, target_bid + min_spread)
         bid_price = math.floor(target_bid)
         ask_price = math.ceil(target_ask)
 
+        # Check if we can place market making orders (should not overlap with reversion orders)
         can_place_mm_bid = not (product == 'RAINFOREST_RESIN' and reversion_buy_price is not None and bid_price >= reversion_buy_price)
         can_place_mm_ask = not (product == 'RAINFOREST_RESIN' and reversion_sell_price is not None and ask_price <= reversion_sell_price)
 
+        # Place bid if possible
         if buy_room > 0 and can_place_mm_bid:
             if not order_depth.sell_orders or bid_price < min(order_depth.sell_orders.keys()):
-                 bid_qty = min(current_base_qty, buy_room)
-                 if not any(o.price == bid_price and o.quantity > 0 for o in orders):
-                     logger.print(f"MM BID {product}: {bid_qty}x{bid_price} (Sprd:{dynamic_spread}, Skew:{inventory_skew:.1f}, Qty:{current_base_qty})") # Use logger
-                     orders.append(Order(product, bid_price, bid_qty))
+                bid_qty = min(current_base_qty, buy_room)
+                if not any(o.price == bid_price and o.quantity > 0 for o in orders):
+                    logger.print(f"MM BID {product}: {bid_qty}x{bid_price} (Sprd:{dynamic_spread}, Skew:{inventory_skew:.1f}, Qty:{current_base_qty})")
+                    orders.append(Order(product, bid_price, bid_qty))
 
+        # Place ask if possible
         if sell_room > 0 and can_place_mm_ask:
-             if not order_depth.buy_orders or ask_price > max(order_depth.buy_orders.keys()):
-                 ask_qty = min(current_base_qty, sell_room)
-                 if not any(o.price == ask_price and o.quantity < 0 for o in orders):
-                      logger.print(f"MM ASK {product}: {ask_qty}x{ask_price} (Sprd:{dynamic_spread}, Skew:{inventory_skew:.1f}, Qty:{current_base_qty})") # Use logger
-                      orders.append(Order(product, ask_price, -ask_qty))
+            if not order_depth.buy_orders or ask_price > max(order_depth.buy_orders.keys()):
+                ask_qty = min(current_base_qty, sell_room)
+                if not any(o.price == ask_price and o.quantity < 0 for o in orders):
+                    logger.print(f"MM ASK {product}: {ask_qty}x{ask_price} (Sprd:{dynamic_spread}, Skew:{inventory_skew:.1f}, Qty:{current_base_qty})")
+                    orders.append(Order(product, ask_price, -ask_qty))
 
         return orders
 

@@ -1,10 +1,20 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env
+
+# Conda environments
+conda-env/
+.conda-env/
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -16,33 +26,34 @@ lib64/
 parts/
 sdist/
 var/
+wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Virtual environments
-venv/
-ENV/
-env/
+# Jupyter Notebook
+.ipynb_checkpoints
 
-# IDEs and editors
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
-
-# OS specific files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
-# Project specific
-backtests/
-profiles/
-*.log
+# Project-specific
 *.db
+*.sqlite
+*.sqlite3
+.optuna_sqlite_db
+activate_env.sh
+__init__.py
+
+# Logs
+logs/
+*.log
+
+# Data files (exclude large data files but keep directory structure)
+data/*.csv
+# Keep an empty .gitkeep file to maintain the directory structure
+!data/.gitkeep

@@ -5,7 +5,7 @@ import time # To measure execution time
 
 # --- Configuration ---
 # IMPORTANT: Update these filenames to match your downloaded sample data
-ORDER_BOOK_CSV_PATH = 'data/Users/karthikkallam/Documents/imc_prosperity_algo/data/dc74c346-7f23-421a-890a-7f3006671568.csv'
+ORDER_BOOK_CSV_PATH = 'data/prices_round_2_day_0.csv'
 # TRADE_CSV_PATH = 'data/YOUR_SAMPLE_TRADE_DATA.csv' # Optional, if needed for FV calc
 
 # --- Helper Function to Parse Order Book Data ---
@@ -36,7 +36,7 @@ def parse_order_depth_from_row(row, product: str) -> OrderDepth:
 def run_simulation():
     print(f"Loading data from {ORDER_BOOK_CSV_PATH}...")
     try:
-        market_data_df = pd.read_csv(ORDER_BOOK_CSV_PATH, delim_whitespace=True) 
+        market_data_df = pd.read_csv(ORDER_BOOK_CSV_PATH, delimiter=';')
         print(f"Data loaded. Columns: {market_data_df.columns.tolist()}")
     except FileNotFoundError:
         print(f"ERROR: File not found at {ORDER_BOOK_CSV_PATH}")
