@@ -1,19 +1,16 @@
-# Optimized trader.py for Tutorial Round - V3 (Visualizer Logging Integrated)
+# Optimized trader.py for IMC Prosperity 3 - Round 2
 
 import json
-from typing import Dict, List, Any, Tuple, Optional, Union
-from typing_extensions import TypedDict
+from typing import Dict, List, Any, Tuple
 import jsonpickle
 import numpy as np
 import math
 import statistics
 
 # Assume datamodel.py containing Listing, OrderDepth, Trade, TradingState, Order etc. is available
-# Ensure you have the correct datamodel.py file in your execution environment
-from datamodel import * # Make sure datamodel.py is accessible
+from datamodel import *
 
 # --- Visualizer Logger Class ---
-# (Copied directly from the prerequisites provided)
 class Logger:
     def __init__(self) -> None:
         self.logs = ""
@@ -23,51 +20,38 @@ class Logger:
         # Appends logs to an internal buffer; limit checked during flush
         self.logs += sep.join(map(str, objects)) + end
 
-    def flush(self, state: TradingState, orders: Dict[Symbol, List[Order]], conversions: int, trader_data: str) -> None:
-        try:
-            # Convert numpy types to Python native types for JSON serialization
-            timestamp = int(state.timestamp) if hasattr(state.timestamp, "item") else state.timestamp
-            # Calculate base length without large variable data
-            compressed_state_base = [timestamp, "", self.compress_listings(state.listings), self.compress_order_depths(state.order_depths), self.compress_trades(state.own_trades), self.compress_trades(state.market_trades), state.position, self.compress_observations(state.observations)]
-            base_json_part = self.to_json([compressed_state_base, self.compress_orders(orders), conversions, "", ""]) # Empty strings for traderData and logs
-            base_length = len(base_json_part) - 4 # Account for the 4 empty strings "" we used as placeholders
-        except Exception as e:
-            # Log the error but continue with minimal data to avoid crashing
-            self.logs += f"Error in flush preparation: {e}\n"
-            base_length = 0  # Set a minimal length
+    def flush(self, state: TradingState, orders: dict[Symbol, list[Order]], conversions: int, trader_data: str) -> None:
+        # Calculate base length without large variable data
+        compressed_state_base = [state.timestamp, "", self.compress_listings(state.listings), self.compress_order_depths(state.order_depths), self.compress_trades(state.own_trades), self.compress_trades(state.market_trades), state.position, self.compress_observations(state.observations)]
+        base_json_part = self.to_json([compressed_state_base, self.compress_orders(orders), conversions, "", ""]) # Empty strings for traderData and logs
+        base_length = len(base_json_part) - 4 # Account for the 4 empty strings "" we used as placeholders
 
         # Calculate remaining length and divide by 3 for the variable parts
         available_length = self.max_log_length - base_length
         max_item_length = available_length // 3
         if max_item_length < 0: max_item_length = 0 # Ensure non-negative length
 
-        try:
-            # Prepare the final list with potentially truncated data
-            log_entry = [
-                self.compress_state(state, self.truncate(state.traderData, max_item_length)), # Compress state with potentially truncated internal traderData
-                self.compress_orders(orders),
-                conversions,
-                self.truncate(trader_data, max_item_length), # Use potentially truncated output trader_data
-                self.truncate(self.logs, max_item_length)    # Use potentially truncated custom logs
-            ]
+        # Prepare the final list with potentially truncated data
+        log_entry = [
+            self.compress_state(state, self.truncate(state.traderData, max_item_length)), # Compress state with potentially truncated internal traderData
+            self.compress_orders(orders),
+            conversions,
+            self.truncate(trader_data, max_item_length), # Use potentially truncated output trader_data
+            self.truncate(self.logs, max_item_length)    # Use potentially truncated custom logs
+        ]
 
-            # Print the single JSON line for this iteration
-            print(self.to_json(log_entry))
-        except Exception as e:
-            # If we can't create the log entry, at least print a basic error message
-            print(f"ERROR in logger.flush: {e}")
+        # Print the single JSON line for this iteration
+        print(self.to_json(log_entry))
 
         # Reset internal log buffer for the next iteration
         self.logs = ""
 
-    # --- Compression Methods (Copied from Logger Prerequisites) ---
-    def compress_state(self, state: TradingState, trader_data: str) -> List[Any]:
+    # --- Compression Methods ---
+    def compress_state(self, state: TradingState, trader_data: str) -> list[Any]:
         # Ensure observations exist, create empty if not
         obs = state.observations if state.observations else Observation({}, {})
-        # Convert timestamp to int if it's a numpy integer type
-        timestamp = int(state.timestamp) if hasattr(state.timestamp, "item") else state.timestamp
         return [
-            timestamp,
+            state.timestamp,
             trader_data, # Use the (potentially truncated) trader_data passed in
             self.compress_listings(state.listings),
             self.compress_order_depths(state.order_depths),
@@ -77,7 +61,7 @@ class Logger:
             self.compress_observations(obs), # Use ensured Observation object
         ]
 
-    def compress_listings(self, listings: Dict[Symbol, Listing]) -> List[List[Any]]:
+    def compress_listings(self, listings: dict[Symbol, Listing]) -> list[list[Any]]:
         compressed = []
         # Handle cases where listings might be None or empty
         if listings:
@@ -85,7 +69,7 @@ class Logger:
                 compressed.append([listing.symbol, listing.product, listing.denomination])
         return compressed
 
-    def compress_order_depths(self, order_depths: Dict[Symbol, OrderDepth]) -> Dict[Symbol, List[Any]]:
+    def compress_order_depths(self, order_depths: dict[Symbol, OrderDepth]) -> dict[Symbol, list[Any]]:
         compressed = {}
         if order_depths:
             for symbol, order_depth in order_depths.items():
@@ -95,7 +79,7 @@ class Logger:
                 compressed[symbol] = [buy_orders, sell_orders]
         return compressed
 
-    def compress_trades(self, trades: Dict[Symbol, List[Trade]]) -> List[List[Any]]:
+    def compress_trades(self, trades: dict[Symbol, list[Trade]]) -> list[list[Any]]:
         compressed = []
         if trades:
             for arr in trades.values():
@@ -116,7 +100,7 @@ class Logger:
                              )
         return compressed
 
-    def compress_observations(self, observations: Observation) -> List[Any]:
+    def compress_observations(self, observations: Observation) -> list[Any]:
          # Ensure nested dictionaries exist within the Observation object
          plain_obs = observations.plainValueObservations if hasattr(observations, 'plainValueObservations') and observations.plainValueObservations else {}
          conv_obs_orig = observations.conversionObservations if hasattr(observations, 'conversionObservations') and observations.conversionObservations else {}
@@ -134,14 +118,14 @@ class Logger:
                          getattr(observation, 'exportTariff', 0),
                          getattr(observation, 'importTariff', 0),
                          # Use getattr for potentially missing attributes with default 0
-                         getattr(observation, 'sugarPrice', 0), # Correct field name from datamodel
-                         getattr(observation, 'sunlightIndex', 0), # Correct field name from datamodel
+                         getattr(observation, 'sugarPrice', 0),  
+                         getattr(observation, 'sunlightIndex', 0),
                      ]
 
          return [plain_obs, conversion_observations_compressed]
 
 
-    def compress_orders(self, orders: Dict[Symbol, List[Order]]) -> List[List[Any]]:
+    def compress_orders(self, orders: dict[Symbol, list[Order]]) -> list[list[Any]]:
         compressed = []
         if orders:
             for arr in orders.values():
@@ -153,7 +137,6 @@ class Logger:
 
     def to_json(self, value: Any) -> str:
         # Use ProsperityEncoder if provided and needed, else default json
-        # Assuming ProsperityEncoder handles specific object types if necessary
         return json.dumps(value, cls=ProsperityEncoder, separators=(",", ":"))
 
     def truncate(self, value: str, max_length: int) -> str:
@@ -167,13 +150,30 @@ class Logger:
 # Create a global instance of the logger
 logger = Logger()
 
-# --- Tunable Parameters (Expanded for Round 2) ---
+# --- Round 2 Position Limits ---
+POSITION_LIMITS = {
+    'RAINFOREST_RESIN': 50, 
+    'KELP': 50,
+    'CROISSANT': 250,
+    'JAM': 350,
+    'DJEMBE': 60,
+    'PICNIC_BASKET1': 60,
+    'PICNIC_BASKET2': 100
+}
+
+# --- Picnic Basket Contents ---
+BASKET_CONTENTS = {
+    'PICNIC_BASKET1': {'CROISSANT': 6, 'JAM': 3, 'DJEMBE': 1},
+    'PICNIC_BASKET2': {'CROISSANT': 4, 'JAM': 2}
+}
+
+# --- Tunable Parameters ---
 PARAMS = {
     "shared": {
-        "take_profit_threshold": 0.4, # Threshold for sniping trades
-        "max_history_length": 90,     # History window for stats calculation
-        "arbitrage_threshold": 2.0,   # Threshold for basket arbitrage
-        "conversion_threshold": 2.0   # Threshold for conversion trades
+        "take_profit_threshold": 0.4,
+        "max_history_length": 90,
+        "arbitrage_threshold": 1.0,  # Minimum profit to attempt basket arbitrage
+        "conversion_threshold": 1.0  # Minimum profit to attempt basket conversion
     },
     "RAINFOREST_RESIN": {
         "fair_value_anchor": 10000.0,
@@ -195,87 +195,64 @@ PARAMS = {
         "imbalance_depth": 5,
         "imbalance_fv_adjustment_factor": 0.36
     },
-    "CROISSANTS": {
+    "CROISSANT": {
         "ema_alpha": 0.1,
-        "min_spread": 1,
-        "volatility_spread_factor": 0.7,
+        "min_spread": 2,
+        "volatility_spread_factor": 0.8,
         "inventory_skew_factor": 0.005,
         "base_order_qty": 50,
         "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.2
+        "imbalance_fv_adjustment_factor": 0.3
     },
-    "JAMS": {
-        "ema_alpha": 0.1,
+    "JAM": {
+        "ema_alpha": 0.08,
         "min_spread": 1,
         "volatility_spread_factor": 0.7,
-        "inventory_skew_factor": 0.005,
-        "base_order_qty": 40,
+        "inventory_skew_factor": 0.004,
+        "base_order_qty": 60,
         "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.2
+        "imbalance_fv_adjustment_factor": 0.25
     },
-    "DJEMBES": {
-        "ema_alpha": 0.05,
+    "DJEMBE": {
+        "ema_alpha": 0.04,
         "min_spread": 3,
         "volatility_spread_factor": 1.0,
         "inventory_skew_factor": 0.02,
         "base_order_qty": 10,
-        "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.3
-    },
-    "SQUID_INK": {
-        "ema_alpha": 0.05,
-        "min_spread": 2,
-        "volatility_spread_factor": 0.8,
-        "inventory_skew_factor": 0.01,
-        "base_order_qty": 20,
-        "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.25
+        "imbalance_depth": 4,
+        "imbalance_fv_adjustment_factor": 0.4
     },
     "PICNIC_BASKET1": {
         "ema_alpha": 0.05,
         "min_spread": 5,
-        "volatility_spread_factor": 0.8,
+        "volatility_spread_factor": 0.9,
         "inventory_skew_factor": 0.015,
-        "base_order_qty": 15,
+        "base_order_qty": 12,
         "imbalance_depth": 3,
-        "imbalance_fv_adjustment_factor": 0.25
+        "imbalance_fv_adjustment_factor": 0.3
     },
     "PICNIC_BASKET2": {
-        "ema_alpha": 0.05,
-        "min_spread": 5,
-        "volatility_spread_factor": 0.8,
-        "inventory_skew_factor": 0.015,
-        "base_order_qty": 15,
+        "ema_alpha": 0.06,
+        "min_spread": 4,
+        "volatility_spread_factor": 0.85,
+        "inventory_skew_factor": 0.01,
+        "base_order_qty": 20,
         "imbalance_depth": 3,
         "imbalance_fv_adjustment_factor": 0.25
     }
 }
 
-# Round 2 Position Limits
-POSITION_LIMITS = {
-    'RAINFOREST_RESIN': 150,
-    'KELP': 300,
-    'CROISSANTS': 600,
-    'JAMS': 500,
-    'DJEMBES': 50,
-    'SQUID_INK': 250,
-    'PICNIC_BASKET1': 60,
-    'PICNIC_BASKET2': 80
-}
-
 class Trader:
 
     def __init__(self):
-        # You can add initialization here if needed, but state should go in traderData
-        # Using logger.print here might be useful for one-time init messages
-        logger.print("Initializing Optimized Tutorial Trader V3 (Visualizer Enabled)...")
+        logger.print("Initializing IMC Prosperity 3 Round 2 Trader...")
 
-    # --- State Management Methods (Keep deserialize/serialize from V3) ---
+    # --- State Management Methods ---
     def deserialize_state(self, traderData: str) -> Dict[str, Any]:
-        # (Keep the robust deserialize_state from previous version)
         default_state = {
             "price_history": {}, "ema_prices": {}, "std_devs": {},
-            "fair_values": {}, "last_wmp": {}
+            "fair_values": {}, "last_wmp": {},
+            "best_bids": {}, "best_asks": {}  # Track best bid/ask for arbitrage detection
         }
         for prod in POSITION_LIMITS:
             default_state["price_history"].setdefault(prod, [])
@@ -283,6 +260,8 @@ class Trader:
             default_state["std_devs"].setdefault(prod, 0.0)
             default_state["fair_values"].setdefault(prod, None)
             default_state["last_wmp"].setdefault(prod, None)
+            default_state["best_bids"].setdefault(prod, None)
+            default_state["best_asks"].setdefault(prod, None)
 
         if not traderData: return default_state
         try:
@@ -304,23 +283,14 @@ class Trader:
             return default_state
 
     def serialize_state(self, state_dict: Dict[str, Any]) -> str:
-        """Saves state to a string using jsonpickle."""
         try:
-            # Using unpicklable=False is generally safer and sufficient if only standard types are used
             return jsonpickle.encode(state_dict, unpicklable=False)
         except Exception as e:
             logger.print(f"Error serializing state: {e}")
-            return "" # Return empty string on error
+            return ""
 
-
-    # --- Helper Methods (Keep calculate_*, update_ema, update_history_and_stats from V3) ---
-    # ... (Keep the existing helper methods calculate_weighted_mid_price,
-    #      calculate_order_book_imbalance, update_ema, update_history_and_stats,
-    #      calculate_fair_value unchanged from the previous V3 code) ...
-
-    # Make sure helper methods are correctly indented within the Trader class
-    def calculate_weighted_mid_price(self, order_depth: OrderDepth) -> Optional[float]:
-        # (Same implementation as V3)
+    # --- Helper Methods ---
+    def calculate_weighted_mid_price(self, order_depth: OrderDepth) -> float | None:
         if not order_depth.sell_orders or not order_depth.buy_orders: return None
         sorted_bids = sorted(order_depth.buy_orders.items(), reverse=True)
         sorted_asks = sorted(order_depth.sell_orders.items())
@@ -334,7 +304,6 @@ class Trader:
         return (best_bid_price * best_ask_vol + best_ask_price * best_bid_vol) / (best_bid_vol + best_ask_vol)
 
     def calculate_order_book_imbalance(self, order_depth: OrderDepth, depth: int) -> float:
-        # (Same implementation as V3)
         sorted_bids = sorted(order_depth.buy_orders.items(), reverse=True)
         sorted_asks = sorted(order_depth.sell_orders.items())
         total_bid_vol = sum(vol for price, vol in sorted_bids[:depth])
@@ -344,15 +313,13 @@ class Trader:
         return (total_bid_vol - total_ask_vol) / denominator
 
     def update_ema(self, current_value: float, product: str, state_dict: Dict[str, Any], alpha: float):
-         # (Same implementation as V3)
         state_dict.setdefault("ema_prices", {})
         if state_dict["ema_prices"].get(product) is None:
             state_dict["ema_prices"][product] = current_value
         else:
             state_dict["ema_prices"][product] = alpha * current_value + (1 - alpha) * state_dict["ema_prices"][product]
 
-    def update_history_and_stats(self, product: str, current_wmp: Optional[float], state_dict: Dict[str, Any]):
-         # (Same implementation as V3)
+    def update_history_and_stats(self, product: str, current_wmp: float | None, state_dict: Dict[str, Any]):
         state_dict.setdefault("price_history", {}).setdefault(product, [])
         state_dict.setdefault("std_devs", {}).setdefault(product, 0.0)
         state_dict.setdefault("last_wmp", {}).setdefault(product, None)
@@ -378,49 +345,54 @@ class Trader:
         else:
              state_dict["std_devs"][product] = last_std_dev
 
-
-    def calculate_fair_value(self, product: str, wmp: Optional[float], order_depth: OrderDepth, state_dict: Dict[str, Any]) -> Optional[float]:
-         # (Modified to handle more products)
-        # Default to Kelp-like parameters if specific product params not found
-        params = PARAMS.get(product, PARAMS.get('KELP', {}))
+    def update_best_prices(self, product: str, order_depth: OrderDepth, state_dict: Dict[str, Any]) -> None:
+        state_dict.setdefault("best_bids", {})
+        state_dict.setdefault("best_asks", {})
         
+        if order_depth.buy_orders:
+            state_dict["best_bids"][product] = max(order_depth.buy_orders.keys())
+        if order_depth.sell_orders:
+            state_dict["best_asks"][product] = min(order_depth.sell_orders.keys())
+
+    def calculate_fair_value(self, product: str, wmp: float | None, order_depth: OrderDepth, state_dict: Dict[str, Any]) -> float | None:
+        params = PARAMS.get(product, PARAMS["KELP"]) # Use KELP as default if product not found
         state_dict.setdefault("ema_prices", {}).setdefault(product, None)
         state_dict.setdefault("fair_values", {}).setdefault(product, None)
         state_dict.setdefault("last_wmp", {}).setdefault(product, None)
-        last_ema = state_dict["ema_prices"][product]
-        last_fv = state_dict["fair_values"][product]
-        last_wmp_val = state_dict["last_wmp"][product]
+        
+        last_ema = state_dict["ema_prices"].get(product)
+        last_fv = state_dict["fair_values"].get(product)
+        last_wmp_val = state_dict["last_wmp"].get(product)
+        
         current_price_point = wmp
         if current_price_point is None: current_price_point = last_wmp_val
         if current_price_point is None: current_price_point = last_ema
         if current_price_point is None: current_price_point = last_fv
+        
         if current_price_point is None and product == 'RAINFOREST_RESIN':
             current_price_point = params.get("fair_value_anchor")
             if current_price_point is None:
-                 logger.print(f"CRITICAL WARNING: Anchor FV not defined for {product}") # Use logger
-                 return None
+                logger.print(f"CRITICAL WARNING: Anchor FV not defined for {product}")
+                return None
         elif current_price_point is None:
-             logger.print(f"CRITICAL WARNING: Cannot determine price point for {product}. Skipping FV calc.") # Use logger
-             return None
+            logger.print(f"CRITICAL WARNING: Cannot determine price point for {product}. Skipping FV calc.")
+            return None
 
-        # Calculate fair value based on product
+        fair_value = None
         if product == 'RAINFOREST_RESIN':
-             # Anchor-based resin fair value
-             anchor = params.get("fair_value_anchor", 10000.0)
-             alpha = params.get("anchor_blend_alpha", 0.08)
-             fair_value = alpha * current_price_point + (1 - alpha) * anchor
+            anchor = params["fair_value_anchor"]
+            alpha = params["anchor_blend_alpha"]
+            fair_value = alpha * current_price_point + (1 - alpha) * anchor
         else:
-            # All other products use EMA-based fair value with optional imbalance adjustment
-            ema_alpha = params.get("ema_alpha", 0.05)  # Default EMA alpha if not found
-            self.update_ema(current_price_point, product, state_dict, ema_alpha)
+            self.update_ema(current_price_point, product, state_dict, params["ema_alpha"])
             fair_value = state_dict["ema_prices"][product]
             
-            # Add order book imbalance adjustment if parameters are available
+            # Apply order book imbalance adjustment if product has imbalance parameters
             if "imbalance_depth" in params and "imbalance_fv_adjustment_factor" in params:
                 imbalance = self.calculate_order_book_imbalance(order_depth, params["imbalance_depth"])
                 std_dev = state_dict["std_devs"].get(product, 0.0)
                 safe_std_dev = max(std_dev, 0.1)
-                spread_guess = max(params.get("min_spread", 2), round(safe_std_dev * params.get("volatility_spread_factor", 1.0)))
+                spread_guess = max(params["min_spread"], round(safe_std_dev * params["volatility_spread_factor"]))
                 spread_guess = min(spread_guess, 10)
                 adj_factor = params["imbalance_fv_adjustment_factor"]
                 fv_adjustment = imbalance * adj_factor * spread_guess
@@ -429,20 +401,16 @@ class Trader:
         state_dict["fair_values"][product] = fair_value
         return fair_value
 
-
     def manage_orders(self, product: str, position: int, limit: int, fair_value: float, std_dev: float, order_depth: OrderDepth, state_dict: Dict[str, Any]) -> List[Order]:
-        """Generates orders using product-specific logic and parameters."""
-        # Get parameters for this product (default to KELP if missing)
-        params = PARAMS.get(product, PARAMS.get('KELP', {}))
+        params = PARAMS.get(product, {})
         orders: List[Order] = []
         buy_room = limit - position
         sell_room = limit + position
 
-        # Get base order quantity with optional volatility adjustment
-        current_base_qty = params.get("base_order_qty", 10)  # Default if missing
+        current_base_qty = params.get("base_order_qty", 20)  # Default to 20 if not specified
         
-        # Apply volatility-based quantity reduction if parameters are available
-        if "max_volatility_for_qty_reduction" in params and "min_volatility_qty_factor" in params:
+        # Product-specific quantity adjustment
+        if product == 'KELP' and "max_volatility_for_qty_reduction" in params:
             volatility = std_dev
             max_vol = params["max_volatility_for_qty_reduction"]
             min_qty_factor = params["min_volatility_qty_factor"]
@@ -450,11 +418,10 @@ class Trader:
                 qty_factor = max(min_qty_factor, 1.0 - (volatility / max_vol) * (1.0 - min_qty_factor))
                 current_base_qty = max(1, round(params["base_order_qty"] * qty_factor))
 
-        # Get shared parameters with defaults
-        take_profit_threshold = PARAMS.get("shared", {}).get("take_profit_threshold", 0.4)
+        take_profit_threshold = PARAMS["shared"]["take_profit_threshold"]
         orders_to_add: List[Order] = []
 
-        # Snipe underpriced asks
+        # Sniping logic - take advantageous prices
         if order_depth.sell_orders and buy_room > 0:
             best_ask = min(order_depth.sell_orders.keys())
             if best_ask < fair_value - take_profit_threshold:
@@ -465,7 +432,6 @@ class Trader:
                     orders_to_add.append(Order(product, best_ask, qty_to_buy))
                     buy_room -= qty_to_buy
 
-        # Snipe overpriced bids
         if order_depth.buy_orders and sell_room > 0:
             best_bid = max(order_depth.buy_orders.keys())
             if best_bid > fair_value + take_profit_threshold:
@@ -478,10 +444,10 @@ class Trader:
 
         orders.extend(orders_to_add)
 
-        # For RAINFOREST_RESIN, apply mean reversion trading around anchor
+        # Mean reversion logic for RAINFOREST_RESIN
         reversion_buy_price = None
         reversion_sell_price = None
-        if product == 'RAINFOREST_RESIN' and 'fair_value_anchor' in params:
+        if product == 'RAINFOREST_RESIN':
             anchor = params['fair_value_anchor']
             reversion_threshold = params.get('reversion_threshold', 2)
 
@@ -505,14 +471,12 @@ class Trader:
                         sell_room -= qty_to_sell
                         reversion_sell_price = best_bid
 
-        # Calculate spread based on volatility
-        min_spread = params.get("min_spread", 2)  # Default if missing
+        # Market making logic
+        min_spread = params.get("min_spread", 2)
         safe_std_dev = max(std_dev, 0.1)
         vol_spread = round(safe_std_dev * params.get("volatility_spread_factor", 1.0))
         dynamic_spread = max(min_spread, vol_spread)
         dynamic_spread = min(dynamic_spread, 10)
-        
-        # Apply inventory skew
         inventory_skew = round(position * params.get("inventory_skew_factor", 0.01))
         target_bid = fair_value - (dynamic_spread / 2.0) - inventory_skew
         target_ask = fair_value + (dynamic_spread / 2.0) - inventory_skew
@@ -520,11 +484,9 @@ class Trader:
         bid_price = math.floor(target_bid)
         ask_price = math.ceil(target_ask)
 
-        # Check if we can place market making orders (should not overlap with reversion orders)
         can_place_mm_bid = not (product == 'RAINFOREST_RESIN' and reversion_buy_price is not None and bid_price >= reversion_buy_price)
         can_place_mm_ask = not (product == 'RAINFOREST_RESIN' and reversion_sell_price is not None and ask_price <= reversion_sell_price)
 
-        # Place bid if possible
         if buy_room > 0 and can_place_mm_bid:
             if not order_depth.sell_orders or bid_price < min(order_depth.sell_orders.keys()):
                 bid_qty = min(current_base_qty, buy_room)
@@ -532,7 +494,6 @@ class Trader:
                     logger.print(f"MM BID {product}: {bid_qty}x{bid_price} (Sprd:{dynamic_spread}, Skew:{inventory_skew:.1f}, Qty:{current_base_qty})")
                     orders.append(Order(product, bid_price, bid_qty))
 
-        # Place ask if possible
         if sell_room > 0 and can_place_mm_ask:
             if not order_depth.buy_orders or ask_price > max(order_depth.buy_orders.keys()):
                 ask_qty = min(current_base_qty, sell_room)
@@ -542,66 +503,236 @@ class Trader:
 
         return orders
 
-    def handle_conversions(self, product: str, position: int, observation: ConversionObservation) -> int:
-         # (Same implementation as V3 - returns 0 for tutorial)
-         return 0
+    # --- Basket Arbitrage Methods ---
+    def calculate_basket_fair_values(self, state_dict: Dict[str, Any]) -> Dict[str, float]:
+        """Calculate the theoretical fair values for picnic baskets based on components."""
+        basket_fair_values = {}
+        component_fair_values = state_dict["fair_values"]
+        
+        for basket, contents in BASKET_CONTENTS.items():
+            # Only calculate if all components have fair values
+            if all(component_fair_values.get(item) is not None for item in contents):
+                basket_value = sum(contents[item] * component_fair_values[item] for item in contents)
+                basket_fair_values[basket] = basket_value
+                logger.print(f"{basket} theoretical value: {basket_value:.2f} based on components")
+            else:
+                logger.print(f"Can't calculate {basket} value - missing component fair values")
+        
+        return basket_fair_values
+
+    def detect_basket_arbitrage(self, state: TradingState, state_dict: Dict[str, Any]) -> List[Order]:
+        """Detect and execute basket arbitrage opportunities."""
+        arbitrage_orders = []
+        basket_fair_values = self.calculate_basket_fair_values(state_dict)
+        arbitrage_threshold = PARAMS["shared"]["arbitrage_threshold"]
+        
+        for basket, theoretical_value in basket_fair_values.items():
+            if basket not in state.order_depths: continue
+            
+            contents = BASKET_CONTENTS[basket]
+            basket_limit = POSITION_LIMITS[basket]
+            basket_position = state.position.get(basket, 0)
+            
+            # Check if all component products are available to trade
+            components_tradable = all(comp in state.order_depths for comp in contents)
+            if not components_tradable: continue
+            
+            basket_depth = state.order_depths[basket]
+            
+            # Check for "buy basket, sell components" opportunity
+            if basket_depth.sell_orders:
+                best_basket_ask = min(basket_depth.sell_orders.keys())
+                basket_ask_vol = abs(basket_depth.sell_orders[best_basket_ask])
+                
+                if best_basket_ask < theoretical_value - arbitrage_threshold:
+                    # Determine how many baskets we can buy
+                    buy_room = basket_limit - basket_position
+                    
+                    # Check component position limits
+                    component_room = {}
+                    for comp, qty in contents.items():
+                        comp_position = state.position.get(comp, 0)
+                        comp_limit = POSITION_LIMITS[comp]
+                        comp_room = comp_limit - comp_position
+                        component_room[comp] = comp_room // qty
+                    
+                    # The most limiting component or basket
+                    max_baskets = min(buy_room, basket_ask_vol, *component_room.values())
+                    
+                    if max_baskets > 0:
+                        # Buy basket
+                        arbitrage_orders.append(Order(basket, best_basket_ask, max_baskets))
+                        logger.print(f"ARBITRAGE: BUY {max_baskets}x{basket} @ {best_basket_ask}")
+                        
+                        # Sell components
+                        for comp, qty in contents.items():
+                            comp_best_bid = max(state.order_depths[comp].buy_orders.keys())
+                            sell_qty = max_baskets * qty
+                            arbitrage_orders.append(Order(comp, comp_best_bid, -sell_qty))
+                            logger.print(f"ARBITRAGE: SELL {sell_qty}x{comp} @ {comp_best_bid}")
+            
+            # Check for "buy components, sell basket" opportunity
+            if basket_depth.buy_orders:
+                best_basket_bid = max(basket_depth.buy_orders.keys())
+                basket_bid_vol = basket_depth.buy_orders[best_basket_bid]
+                
+                if best_basket_bid > theoretical_value + arbitrage_threshold:
+                    # Determine how many baskets we can sell
+                    sell_room = basket_limit + basket_position
+                    
+                    # Check component position limits
+                    component_room = {}
+                    for comp, qty in contents.items():
+                        comp_position = state.position.get(comp, 0)
+                        comp_limit = POSITION_LIMITS[comp]
+                        comp_room = comp_limit + comp_position
+                        component_room[comp] = comp_room // qty
+                    
+                    # The most limiting component or basket
+                    max_baskets = min(sell_room, basket_bid_vol, *component_room.values())
+                    
+                    if max_baskets > 0:
+                        # Sell basket
+                        arbitrage_orders.append(Order(basket, best_basket_bid, -max_baskets))
+                        logger.print(f"ARBITRAGE: SELL {max_baskets}x{basket} @ {best_basket_bid}")
+                        
+                        # Buy components
+                        for comp, qty in contents.items():
+                            comp_best_ask = min(state.order_depths[comp].sell_orders.keys())
+                            buy_qty = max_baskets * qty
+                            arbitrage_orders.append(Order(comp, comp_best_ask, buy_qty))
+                            logger.print(f"ARBITRAGE: BUY {buy_qty}x{comp} @ {comp_best_ask}")
+        
+        return arbitrage_orders
+
+def handle_conversions(self, state: TradingState) -> int:
+    """Handle basket conversions based on positions and theoretical values."""
+    state_dict = self.deserialize_state(state.traderData)
+    conversion_threshold = PARAMS["shared"]["conversion_threshold"]
+    basket_fair_values = self.calculate_basket_fair_values(state_dict)
+    
+    # Default - no conversions
+    total_conversions = 0
+    
+    # Implement basket conversion logic
+    for basket, contents in BASKET_CONTENTS.items():
+        theoretical_value = basket_fair_values.get(basket)
+        if theoretical_value is None: continue
+        
+        basket_position = state.position.get(basket, 0)
+        
+        # Check if we have a basket position to convert
+        if basket_position > 0:
+            # Check if converting basket to components is profitable
+            component_total_value = 0
+            for comp, qty in contents.items():
+                if comp not in state.order_depths: continue
+                comp_depth = state.order_depths[comp]
+                if not comp_depth.buy_orders: continue
+                comp_best_bid = max(comp_depth.buy_orders.keys())
+                component_total_value += comp_best_bid * qty
+            
+            # If converting basket to components is profitable
+            if component_total_value > theoretical_value + conversion_threshold:
+                # Signal conversion (implementation depends on competition framework)
+                logger.print(f"CONVERT: {basket} TO COMPONENTS (Value Diff: {component_total_value - theoretical_value:.2f})")
+                total_conversions += 1
+        
+        # Check if we have component positions to convert to basket
+        elif all(state.position.get(comp, 0) >= qty for comp, qty in contents.items()):
+            # Check if converting components to basket is profitable
+            component_total_cost = 0
+            for comp, qty in contents.items():
+                if comp not in state.order_depths: continue
+                comp_depth = state.order_depths[comp]
+                if not comp_depth.sell_orders: continue
+                comp_best_ask = min(comp_depth.sell_orders.keys())
+                component_total_cost += comp_best_ask * qty
+            
+            # If converting components to basket is profitable
+            if theoretical_value > component_total_cost + conversion_threshold:
+                # Signal conversion (implementation depends on competition framework)
+                logger.print(f"CONVERT: COMPONENTS TO {basket} (Value Diff: {theoretical_value - component_total_cost:.2f})")
+                total_conversions += 1
+    
+    return total_conversions
 
     # --- Main Run Method ---
     def run(self, state: TradingState) -> Tuple[Dict[Symbol, List[Order]], int, str]:
         """
-        Main trading logic method called each iteration. Now uses logger.
+        Main trading logic method called each iteration.
         """
         # Initialize final result variables
         result: Dict[Symbol, List[Order]] = {}
-        total_conversions = 0
+        conversions = 0
         traderData = "" # Default empty trader data
 
         try: # Wrap main logic in try-except to ensure flush always runs
             state_dict = self.deserialize_state(state.traderData)
 
+            # First pass - gather market data and calculate fair values
             for product in POSITION_LIMITS:
                 if product not in state.order_depths:
                     result[product] = []
                     continue
 
                 order_depth = state.order_depths[product]
-                current_position = state.position.get(product, 0)
-                limit = POSITION_LIMITS[product]
-
+                self.update_best_prices(product, order_depth, state_dict)
+                
                 wmp = self.calculate_weighted_mid_price(order_depth)
                 self.update_history_and_stats(product, wmp, state_dict)
-                std_dev = state_dict["std_devs"].get(product, 0.0)
-
+                
                 fair_value = self.calculate_fair_value(product, wmp, order_depth, state_dict)
-
                 if fair_value is None:
-                     logger.print(f"Skipping {product} at ts {state.timestamp} - FV could not be determined.")
-                     result[product] = []
-                     continue
+                    logger.print(f"Skipping {product} at ts {state.timestamp} - FV could not be determined.")
+                    result[product] = []
+                    continue
 
-                # Log status using logger.print instead of standard print
+                # Log status
                 wmp_str = f'{wmp:.2f}' if wmp is not None else 'N/A'
+                current_position = state.position.get(product, 0)
+                limit = POSITION_LIMITS[product]
+                std_dev = state_dict["std_devs"].get(product, 0.0)
                 logger.print(f"[{product}] Pos:{current_position:>3}/{limit:<3} | WMP:{wmp_str:>8} | FV:{fair_value:>8.2f} | SD:{std_dev:>6.2f}")
 
+            # Try to detect and execute basket arbitrage
+            arbitrage_orders = self.detect_basket_arbitrage(state, state_dict)
+            for order in arbitrage_orders:
+                result.setdefault(order.symbol, []).append(order)
+
+            # Second pass - manage orders for each product if not already in arbitrage
+            for product in POSITION_LIMITS:
+                if product not in state.order_depths or product not in state_dict["fair_values"]:
+                    continue
+                
+                # Skip if already part of an arbitrage
+                if product in result and result[product]:
+                    continue
+                
+                order_depth = state.order_depths[product]
+                current_position = state.position.get(product, 0)
+                limit = POSITION_LIMITS[product]
+                fair_value = state_dict["fair_values"][product]
+                std_dev = state_dict["std_devs"].get(product, 0.0)
+                
                 product_orders = self.manage_orders(product, current_position, limit, fair_value, std_dev, order_depth, state_dict)
                 result[product] = product_orders
+
+            # Handle any conversions
+            conversions = self.handle_conversions(state)
 
             traderData = self.serialize_state(state_dict) # Serialize final state
 
         except Exception as e:
             # Log any unexpected exceptions during the run
             logger.print(f"ERROR in Trader.run: {e}")
-            # Optionally re-raise or handle differently
-            # result, total_conversions, traderData might be in intermediate states
             # Ensure defaults or last known good values are used for flushing
             result = result if isinstance(result, dict) else {}
-            total_conversions = total_conversions if isinstance(total_conversions, int) else 0
+            conversions = conversions if isinstance(conversions, int) else 0
             traderData = traderData if isinstance(traderData, str) else ""
 
-
-        # **CRITICAL:** Call logger.flush at the end, before returning
-        # Pass the final computed result, conversions, and traderData
-        logger.flush(state, result, total_conversions, traderData)
+        # Call logger.flush at the end, before returning
+        logger.flush(state, result, conversions, traderData)
 
         # Return the same values that were passed to flush
-        return result, total_conversions, traderData
+        return result, conversions, traderData
