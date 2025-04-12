@@ -21,9 +21,9 @@ TRADER_FILE_ORIGINAL = "trader.py"
 DATAMODEL_FILE_ORIGINAL = "datamodel.py"
 STORAGE_DB = "sqlite:///prosperity3_round2_optimization.db"
 STUDY_NAME = "prosperity3-round2-optimizer"
-N_TRIALS = 50  # Number of trials to run (adjust as needed)
+N_TRIALS = 100  
 ROUNDS_TO_TEST = ["2"]  # Only test Round 2
-PARALLEL_JOBS = 1  # Set to >1 if your system supports parallel execution
+PARALLEL_JOBS = 8  # Set to >1 if your system supports parallel execution
 
 # --- Product-Specific Configurations ---
 PRODUCTS = [
@@ -200,8 +200,20 @@ def run_backtests(trader_file: str, rounds: List[str]) -> Tuple[float, Dict[str,
     
     for round_num in rounds:
         try:
+            # First check if the prosperity3bt command is available
+            check_cmd = ["which", "prosperity3bt"]
+            result = subprocess.run(check_cmd, capture_output=True, text=True, check=False)
+            
+            if result.returncode != 0:
+                logger.error("prosperity3bt command not found in PATH. Make sure it's installed and accessible.")
+                logger.info("You might need to install it or activate the correct environment.")
+                return -float('inf'), {}
+            
+            # Now run the backtest
             cmd = ["prosperity3bt", trader_file, round_num, "--merge-pnl", "--no-out"]
             logger.info(f"Running backtest for round {round_num}...")
+            
+            # Run with full output capture
             result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=300)
             
             if result.returncode == 0:
@@ -218,15 +230,39 @@ def run_backtests(trader_file: str, rounds: List[str]) -> Tuple[float, Dict[str,
                         logger.warning(f"Could not parse PnL float from '{match.group(1)}'")
                 else:
                     logger.warning(f"Could not find PnL pattern in stdout for round {round_num}")
+                    logger.debug(f"STDOUT: {result.stdout[:1000]}")
             else:
                 logger.error(f"Backtest failed for round {round_num} with code {result.returncode}")
-                stderr_snippet = result.stderr[:500] + ('...' if len(result.stderr) > 500 else '')
-                logger.error(f"STDERR: {stderr_snippet}")
+                # Show more information about the error
+                if result.stderr:
+                    logger.error(f"STDERR: {result.stderr}")
+                if result.stdout:
+                    logger.debug(f"STDOUT: {result.stdout[:1000]}")
+                
+                # Check if the data files exist
+                data_dir = "data"
+                expected_files = [
+                    f"prices_round_{round_num}_day_0.csv",
+                    f"trades_round_{round_num}_day_0.csv"
+                ]
+                
+                for file in expected_files:
+                    path = os.path.join(data_dir, file)
+                    if not os.path.exists(path):
+                        logger.error(f"Required data file not found: {path}")
+                
+                # Check if prosperity3bt can be executed with a simple command
+                test_cmd = ["prosperity3bt", "--help"]
+                test_result = subprocess.run(test_cmd, capture_output=True, text=True, check=False)
+                if test_result.returncode != 0:
+                    logger.error("prosperity3bt help command failed. There might be issues with the installation.")
+                    logger.error(f"Error: {test_result.stderr}")
                 
         except subprocess.TimeoutExpired:
             logger.error(f"Backtest for round {round_num} timed out after 300 seconds")
         except Exception as e:
             logger.error(f"Error running backtest for round {round_num}: {e}")
+            traceback.print_exc()
             
     return total_pnl, round_pnls
 
@@ -289,6 +325,53 @@ def main():
     logger.info(f"Trials: {N_TRIALS}")
     logger.info(f"Testing rounds: {', '.join(ROUNDS_TO_TEST)}")
     logger.info(f"Products: {', '.join(PRODUCTS)}")
+    
+    # Check if required files exist
+    if not os.path.exists(TRADER_FILE_ORIGINAL):
+        logger.error(f"Trader file '{TRADER_FILE_ORIGINAL}' not found!")
+        return
+    
+    if not os.path.exists(DATAMODEL_FILE_ORIGINAL):
+        logger.error(f"Datamodel file '{DATAMODEL_FILE_ORIGINAL}' not found!")
+        return
+    
+    # Check if data files exist
+    data_dir = "data"
+    if not os.path.exists(data_dir):
+        logger.error(f"Data directory '{data_dir}' not found!")
+        logger.info("Creating data directory...")
+        os.makedirs(data_dir)
+        logger.info("Please add required data files to the data directory")
+        return
+    
+    for round_num in ROUNDS_TO_TEST:
+        price_file = os.path.join(data_dir, f"prices_round_{round_num}_day_0.csv")
+        trade_file = os.path.join(data_dir, f"trades_round_{round_num}_day_0.csv")
+        
+        if not os.path.exists(price_file):
+            logger.error(f"Required price file not found: {price_file}")
+            logger.info("Please download the required data files for Round 2")
+            return
+        
+        if not os.path.exists(trade_file):
+            logger.error(f"Required trade file not found: {trade_file}")
+            logger.info("Please download the required data files for Round 2")
+            return
+    
+    # Test prosperity3bt command
+    try:
+        test_cmd = ["prosperity3bt", "--version"]
+        test_result = subprocess.run(test_cmd, capture_output=True, text=True, check=False)
+        if test_result.returncode != 0:
+            logger.error("prosperity3bt command check failed. Make sure it's installed and accessible.")
+            logger.error(f"Error: {test_result.stderr}")
+            return
+        else:
+            logger.info(f"prosperity3bt version: {test_result.stdout.strip()}")
+    except Exception as e:
+        logger.error(f"Error checking prosperity3bt: {e}")
+        logger.info("Make sure prosperity3bt is installed and accessible in your PATH")
+        return
     
     # Create Optuna study
     study = optuna.create_study(
