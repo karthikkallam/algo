@@ -29,9 +29,9 @@ PARALLEL_JOBS = 1  # Set to >1 if your system supports parallel execution
 PRODUCTS = [
     "RAINFOREST_RESIN", 
     "KELP",
-    "CROISSANT",
-    "JAM",
-    "DJEMBE",
+    "CROISSANTS",
+    "JAMS",
+    "DJEMBES",
     "PICNIC_BASKET1",
     "PICNIC_BASKET2"
 ]
@@ -73,7 +73,7 @@ def define_search_space(trial: optuna.Trial) -> Dict[str, Any]:
     }
     
     # CROISSANT parameters
-    params["CROISSANT"] = {
+    params["CROISSANTS"] = {
         "ema_alpha": trial.suggest_float("c_ema", 0.05, 0.2, step=0.01),
         "min_spread": trial.suggest_int("c_min_spread", 1, 5),
         "volatility_spread_factor": trial.suggest_float("c_vol_spread", 0.3, 1.5, step=0.1),
@@ -84,7 +84,7 @@ def define_search_space(trial: optuna.Trial) -> Dict[str, Any]:
     }
     
     # JAM parameters
-    params["JAM"] = {
+    params["JAMS"] = {
         "ema_alpha": trial.suggest_float("j_ema", 0.05, 0.2, step=0.01),
         "min_spread": trial.suggest_int("j_min_spread", 1, 5),
         "volatility_spread_factor": trial.suggest_float("j_vol_spread", 0.3, 1.5, step=0.1),
@@ -95,7 +95,7 @@ def define_search_space(trial: optuna.Trial) -> Dict[str, Any]:
     }
     
     # DJEMBE parameters
-    params["DJEMBE"] = {
+    params["DJEMBES"] = {
         "ema_alpha": trial.suggest_float("d_ema", 0.02, 0.1, step=0.01),
         "min_spread": trial.suggest_int("d_min_spread", 2, 6),
         "volatility_spread_factor": trial.suggest_float("d_vol_spread", 0.5, 2.0, step=0.1),
@@ -366,16 +366,16 @@ def main():
 
 def organize_params(flat_params: Dict[str, Any]) -> Dict[str, Any]:
     """Reorganize flat parameter dict into nested structure by product."""
-    organized = {"shared": {}, "RAINFOREST_RESIN": {}, "KELP": {}, "CROISSANT": {}, "JAM": {}, 
-                "DJEMBE": {}, "PICNIC_BASKET1": {}, "PICNIC_BASKET2": {}}
+    organized = {"shared": {}, "RAINFOREST_RESIN": {}, "KELP": {}, "CROISSANTS": {}, "JAMS": {}, 
+                "DJEMBES": {}, "PICNIC_BASKET1": {}, "PICNIC_BASKET2": {}}
     
     prefixes = {
         "shared_": "shared",
         "rr_": "RAINFOREST_RESIN",
         "k_": "KELP",
-        "c_": "CROISSANT",
-        "j_": "JAM",
-        "d_": "DJEMBE",
+        "c_": "CROISSANTS",
+        "j_": "JAMS",
+        "d_": "DJEMBES",
         "pb1_": "PICNIC_BASKET1",
         "pb2_": "PICNIC_BASKET2"
     }

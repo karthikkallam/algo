@@ -16,17 +16,21 @@ logger = logging.getLogger(__name__)
 
 # --- Constants for Round 2 ---
 BASKET_CONTENTS = {
-    'PICNIC_BASKET1': {'CROISSANT': 6, 'JAM': 3, 'DJEMBE': 1},
-    'PICNIC_BASKET2': {'CROISSANT': 4, 'JAM': 2}
+    'PICNIC_BASKET1': {'CROISSANTS': 6, 'JAMS': 3, 'DJEMBES': 1},
+    'PICNIC_BASKET2': {'CROISSANTS': 4, 'JAMS': 2}
 }
 
 class BasketAnalyzer:
-    def __init__(self, data_dir: str):
-        """Initialize analyzer with data directory path."""
+    def __init__(self, data_dir: str, output_dir: str = "basket_analysis_output"):
+        """Initialize analyzer with data directory path and output directory."""
         self.data_dir = data_dir
+        self.output_dir = output_dir
         self.prices_files = []
         self.trades_files = []
         self.day_data = {}  # Dictionary to store data for each day
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(self.output_dir, exist_ok=True)
         
         # Find all price and trade files in the directory
         self._find_data_files()
@@ -50,10 +54,19 @@ class BasketAnalyzer:
     
     def _parse_day_from_filename(self, filename: str) -> Optional[int]:
         """Extract day number from filename."""
-        match = re.search(r'day_(\d+)', filename)
+        match = re.search(r'day_(-?\d+)', filename)
         if match:
             return int(match.group(1))
         return None
+    
+    def _detect_delimiter(self, file_path: str) -> str:
+        """Detect the delimiter used in a CSV file."""
+        with open(file_path, 'r') as f:
+            first_line = f.readline().strip()
+        
+        if ';' in first_line:
+            return ';'
+        return ','
     
     def load_data(self) -> None:
         """Load price and trade data from all files."""
@@ -66,18 +79,15 @@ class BasketAnalyzer:
                 
             logger.info(f"Loading price data for day {day} from {os.path.basename(price_file)}")
             try:
-                # First check the file format
-                with open(price_file, 'r') as f:
-                    first_line = f.readline().strip()
-                
-                # Determine delimiter based on first line
-                if ';' in first_line:
-                    delimiter = ';'
-                else:
-                    delimiter = ','
+                # Detect delimiter
+                delimiter = self._detect_delimiter(price_file)
                 
                 # Read the file with the appropriate delimiter
                 df = pd.read_csv(price_file, delimiter=delimiter)
+                
+                # Check if 'product' column exists, if not but 'symbol' does, rename it
+                if 'product' not in df.columns and 'symbol' in df.columns:
+                    df.rename(columns={'symbol': 'product'}, inplace=True)
                 
                 # Initialize day data if not exists
                 if day not in self.day_data:
@@ -85,6 +95,12 @@ class BasketAnalyzer:
                 
                 self.day_data[day]['prices'] = df
                 logger.info(f"Loaded {len(df)} price records for day {day}")
+                
+                # Print sample to debug
+                logger.info(f"Sample price data columns: {df.columns.tolist()}")
+                if len(df) > 0:
+                    logger.info(f"First row sample: {df.iloc[0].to_dict()}")
+                
             except Exception as e:
                 logger.error(f"Error loading price file {price_file}: {e}")
         
@@ -97,18 +113,15 @@ class BasketAnalyzer:
                 
             logger.info(f"Loading trade data for day {day} from {os.path.basename(trade_file)}")
             try:
-                # First check the file format
-                with open(trade_file, 'r') as f:
-                    first_line = f.readline().strip()
-                
-                # Determine delimiter based on first line
-                if ';' in first_line:
-                    delimiter = ';'
-                else:
-                    delimiter = ','
+                # Detect delimiter
+                delimiter = self._detect_delimiter(trade_file)
                 
                 # Read the file with the appropriate delimiter
                 df = pd.read_csv(trade_file, delimiter=delimiter)
+                
+                # Check if 'symbol' column exists, if not but 'product' does, rename it
+                if 'symbol' not in df.columns and 'product' in df.columns:
+                    df.rename(columns={'product': 'symbol'}, inplace=True)
                 
                 # Initialize day data if not exists
                 if day not in self.day_data:
@@ -116,6 +129,12 @@ class BasketAnalyzer:
                 
                 self.day_data[day]['trades'] = df
                 logger.info(f"Loaded {len(df)} trade records for day {day}")
+                
+                # Print sample to debug
+                logger.info(f"Sample trade data columns: {df.columns.tolist()}")
+                if len(df) > 0:
+                    logger.info(f"First row sample: {df.iloc[0].to_dict()}")
+                
             except Exception as e:
                 logger.error(f"Error loading trade file {trade_file}: {e}")
     
@@ -125,16 +144,32 @@ class BasketAnalyzer:
             prices_df = data.get('prices')
             if prices_df is not None:
                 # Ensure column names are normalized
-                # This step depends on the actual format of your data
-                # For example, renaming columns if necessary
                 if 'product' not in prices_df.columns and 'symbol' in prices_df.columns:
                     prices_df.rename(columns={'symbol': 'product'}, inplace=True)
                 
                 # Calculate mid prices if not already present
                 if 'mid_price' not in prices_df.columns:
-                    # This assumes you have bid and ask price columns
+                    # Check for bid_price_1 and ask_price_1 columns
+                    bid_col = None
+                    ask_col = None
+                    
+                    # Try different column naming patterns
                     if 'bid_price_1' in prices_df.columns and 'ask_price_1' in prices_df.columns:
-                        prices_df['mid_price'] = (prices_df['bid_price_1'] + prices_df['ask_price_1']) / 2
+                        bid_col = 'bid_price_1'
+                        ask_col = 'ask_price_1'
+                    elif 'bid_price1' in prices_df.columns and 'ask_price1' in prices_df.columns:
+                        bid_col = 'bid_price1'
+                        ask_col = 'ask_price1'
+                    
+                    if bid_col and ask_col:
+                        # Ensure prices are numeric
+                        prices_df[bid_col] = pd.to_numeric(prices_df[bid_col], errors='coerce')
+                        prices_df[ask_col] = pd.to_numeric(prices_df[ask_col], errors='coerce')
+                        
+                        # Calculate mid price
+                        prices_df['mid_price'] = (prices_df[bid_col] + prices_df[ask_col]) / 2
+                    else:
+                        logger.warning(f"Could not find bid_price_1 and ask_price_1 columns for day {day}")
                 
                 # Store the preprocessed data back
                 self.day_data[day]['prices'] = prices_df
@@ -150,9 +185,12 @@ class BasketAnalyzer:
                 logger.warning(f"No price data for day {day}, skipping analysis.")
                 continue
             
-            # Ensure we have all required products
-            required_products = set(['PICNIC_BASKET1', 'PICNIC_BASKET2', 'CROISSANT', 'JAM', 'DJEMBE'])
+            # Log the unique products in this day's data
             available_products = set(prices_df['product'].unique())
+            logger.info(f"Available products for day {day}: {available_products}")
+            
+            # Ensure we have all required products
+            required_products = set(['PICNIC_BASKET1', 'PICNIC_BASKET2', 'CROISSANTS', 'JAMS', 'DJEMBES'])
             missing_products = required_products - available_products
             
             if missing_products:
@@ -174,6 +212,7 @@ class BasketAnalyzer:
             
             for basket, contents in BASKET_CONTENTS.items():
                 if basket not in available_products:
+                    logger.warning(f"Basket {basket} not available for day {day}")
                     continue
                 
                 # Prepare data for this basket
@@ -187,10 +226,16 @@ class BasketAnalyzer:
                     basket_mid = basket_data.get('mid_price')
                     if pd.isna(basket_mid):
                         # Try to calculate mid price from best bid/ask if available
-                        bid = basket_data.get('bid_price_1')
-                        ask = basket_data.get('ask_price_1')
-                        if not pd.isna(bid) and not pd.isna(ask):
-                            basket_mid = (bid + ask) / 2
+                        bid_price_col = next((col for col in basket_data.index if 'bid_price_1' in col or 'bid_price1' in col), None)
+                        ask_price_col = next((col for col in basket_data.index if 'ask_price_1' in col or 'ask_price1' in col), None)
+                        
+                        if bid_price_col and ask_price_col:
+                            bid = basket_data[bid_price_col]
+                            ask = basket_data[ask_price_col]
+                            if not pd.isna(bid) and not pd.isna(ask):
+                                basket_mid = (bid + ask) / 2
+                            else:
+                                continue
                         else:
                             continue
                     
@@ -207,10 +252,17 @@ class BasketAnalyzer:
                         comp_mid = comp_data.get('mid_price')
                         if pd.isna(comp_mid):
                             # Try to calculate mid price from best bid/ask if available
-                            bid = comp_data.get('bid_price_1')
-                            ask = comp_data.get('ask_price_1')
-                            if not pd.isna(bid) and not pd.isna(ask):
-                                comp_mid = (bid + ask) / 2
+                            bid_price_col = next((col for col in comp_data.index if 'bid_price_1' in col or 'bid_price1' in col), None)
+                            ask_price_col = next((col for col in comp_data.index if 'ask_price_1' in col or 'ask_price1' in col), None)
+                            
+                            if bid_price_col and ask_price_col:
+                                bid = comp_data[bid_price_col]
+                                ask = comp_data[ask_price_col]
+                                if not pd.isna(bid) and not pd.isna(ask):
+                                    comp_mid = (bid + ask) / 2
+                                else:
+                                    missing_components = True
+                                    break
                             else:
                                 missing_components = True
                                 break
@@ -236,6 +288,8 @@ class BasketAnalyzer:
                 if analysis_data:
                     basket_analysis[basket] = pd.DataFrame(analysis_data)
                     logger.info(f"Analyzed {len(analysis_data)} data points for {basket} on day {day}")
+                else:
+                    logger.warning(f"No valid analysis data points for {basket} on day {day}")
             
             results[day] = basket_analysis
         
@@ -244,7 +298,11 @@ class BasketAnalyzer:
     def plot_basket_analysis(self, analysis_results: Dict[int, Dict[str, pd.DataFrame]]) -> None:
         """Plot the basket pricing analysis results."""
         for day, baskets in analysis_results.items():
-            logger.info(f"Plotting results for day {day}")
+            # Create day-specific folder
+            day_folder = os.path.join(self.output_dir, f"day_{day}")
+            os.makedirs(day_folder, exist_ok=True)
+            
+            logger.info(f"Plotting results for day {day} to {day_folder}")
             
             for basket, df in baskets.items():
                 # Create figure with two subplots
@@ -276,12 +334,13 @@ class BasketAnalyzer:
                         f'Mean: {mean_discount:.2f}\nMax: {max_discount:.2f}\nMin: {min_discount:.2f}\nStd: {std_discount:.2f}',
                         transform=ax2.transAxes, bbox=dict(facecolor='white', alpha=0.8))
                 
-                # Save the figure
+                # Save the figure to the day folder
+                file_path = os.path.join(day_folder, f'{basket}_analysis.png')
                 plt.tight_layout()
-                plt.savefig(f'{basket}_analysis_day_{day}.png')
+                plt.savefig(file_path)
                 plt.close()
                 
-                logger.info(f"Created plot for {basket} on day {day}")
+                logger.info(f"Created plot for {basket} on day {day} at {file_path}")
                 
                 # Also create a histogram of discount/premium
                 plt.figure(figsize=(10, 6))
@@ -291,8 +350,16 @@ class BasketAnalyzer:
                 plt.xlabel('Discount/Premium')
                 plt.ylabel('Frequency')
                 plt.grid(True, alpha=0.3)
-                plt.savefig(f'{basket}_histogram_day_{day}.png')
+                hist_path = os.path.join(day_folder, f'{basket}_histogram.png')
+                plt.savefig(hist_path)
                 plt.close()
+                
+                logger.info(f"Created histogram for {basket} on day {day} at {hist_path}")
+                
+                # Save the raw data to CSV
+                csv_path = os.path.join(day_folder, f'{basket}_data.csv')
+                df.to_csv(csv_path, index=False)
+                logger.info(f"Saved raw data for {basket} on day {day} to {csv_path}")
     
     def identify_arbitrage_opportunities(self, analysis_results: Dict[int, Dict[str, pd.DataFrame]], 
                                       threshold: float = 1.0) -> Dict[int, Dict[str, pd.DataFrame]]:
@@ -328,9 +395,12 @@ class BasketAnalyzer:
         return opportunities
     
     def generate_summary_report(self, analysis_results: Dict[int, Dict[str, pd.DataFrame]], 
-                              opportunities: Dict[int, Dict[str, pd.DataFrame]]) -> None:
+                            opportunities: Dict[int, Dict[str, pd.DataFrame]]) -> None:
         """Generate a summary report of the analysis."""
-        with open('basket_analysis_summary.txt', 'w') as f:
+        # Create path for summary report
+        report_path = os.path.join(self.output_dir, 'basket_analysis_summary.txt')
+        
+        with open(report_path, 'w') as f:
             f.write("=== Basket Analysis Summary ===\n\n")
             
             # Overall statistics
@@ -346,12 +416,17 @@ class BasketAnalyzer:
                     if day in opportunities and basket in opportunities[day]:
                         all_opportunities += len(opportunities[day][basket])
             
-            f.write(f"Total data points: {len(all_discounts)}\n")
-            f.write(f"Mean discount/premium: {np.mean(all_discounts):.4f}\n")
-            f.write(f"Standard deviation: {np.std(all_discounts):.4f}\n")
-            f.write(f"Min discount/premium: {min(all_discounts):.4f}\n")
-            f.write(f"Max discount/premium: {max(all_discounts):.4f}\n")
-            f.write(f"Total arbitrage opportunities: {all_opportunities}\n\n")
+            if all_discounts:
+                f.write(f"Total data points: {len(all_discounts)}\n")
+                f.write(f"Mean discount/premium: {np.mean(all_discounts):.4f}\n")
+                f.write(f"Standard deviation: {np.std(all_discounts):.4f}\n")
+                f.write(f"Min discount/premium: {min(all_discounts):.4f}\n")
+                f.write(f"Max discount/premium: {max(all_discounts):.4f}\n")
+                f.write(f"Total arbitrage opportunities: {all_opportunities}\n\n")
+            else:
+                f.write("Total data points: 0\n")
+                f.write("Mean discount/premium: nan\n")
+                f.write("Standard deviation: nan\n")
             
             # Day-by-day statistics
             for day, baskets in analysis_results.items():
@@ -383,7 +458,17 @@ class BasketAnalyzer:
                 
                 f.write("\n")
             
-            logger.info(f"Generated summary report: basket_analysis_summary.txt")
+            logger.info(f"Generated summary report: {report_path}")
+            
+            # Also save identified opportunities to CSV files
+            for day, baskets in opportunities.items():
+                day_folder = os.path.join(self.output_dir, f"day_{day}")
+                os.makedirs(day_folder, exist_ok=True)
+                
+                for basket, df in baskets.items():
+                    opps_path = os.path.join(day_folder, f'{basket}_opportunities.csv')
+                    df.to_csv(opps_path, index=False)
+                    logger.info(f"Saved opportunity data for {basket} on day {day} to {opps_path}")
     
     def run_analysis(self, threshold: float = 1.0) -> None:
         """Run the complete analysis pipeline."""
@@ -412,9 +497,10 @@ class BasketAnalyzer:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze basket pricing for IMC Prosperity Round 2")
     parser.add_argument("--data_dir", type=str, required=True, help="Directory containing price and trade CSV files")
+    parser.add_argument("--output_dir", type=str, default="basket_analysis_output", help="Directory to save output files")
     parser.add_argument("--threshold", type=float, default=1.0, help="Threshold for identifying arbitrage opportunities")
     
     args = parser.parse_args()
     
-    analyzer = BasketAnalyzer(args.data_dir)
+    analyzer = BasketAnalyzer(args.data_dir, args.output_dir)
     analyzer.run_analysis(args.threshold)

@@ -154,17 +154,17 @@ logger = Logger()
 POSITION_LIMITS = {
     'RAINFOREST_RESIN': 50, 
     'KELP': 50,
-    'CROISSANT': 250,
-    'JAM': 350,
-    'DJEMBE': 60,
+    'CROISSANTS': 250,
+    'JAMS': 350,
+    'DJEMBES': 60,
     'PICNIC_BASKET1': 60,
     'PICNIC_BASKET2': 100
 }
 
 # --- Picnic Basket Contents ---
 BASKET_CONTENTS = {
-    'PICNIC_BASKET1': {'CROISSANT': 6, 'JAM': 3, 'DJEMBE': 1},
-    'PICNIC_BASKET2': {'CROISSANT': 4, 'JAM': 2}
+    'PICNIC_BASKET1': {'CROISSANTS': 6, 'JAMS': 3, 'DJEMBES': 1},
+    'PICNIC_BASKET2': {'CROISSANTS': 4, 'JAMS': 2}
 }
 
 # --- Tunable Parameters ---
@@ -195,7 +195,7 @@ PARAMS = {
         "imbalance_depth": 5,
         "imbalance_fv_adjustment_factor": 0.36
     },
-    "CROISSANT": {
+    "CROISSANTS": {
         "ema_alpha": 0.1,
         "min_spread": 2,
         "volatility_spread_factor": 0.8,
@@ -204,7 +204,7 @@ PARAMS = {
         "imbalance_depth": 3,
         "imbalance_fv_adjustment_factor": 0.3
     },
-    "JAM": {
+    "JAMS": {
         "ema_alpha": 0.08,
         "min_spread": 1,
         "volatility_spread_factor": 0.7,
@@ -213,7 +213,7 @@ PARAMS = {
         "imbalance_depth": 3,
         "imbalance_fv_adjustment_factor": 0.25
     },
-    "DJEMBE": {
+    "DJEMBES": {
         "ema_alpha": 0.04,
         "min_spread": 3,
         "volatility_spread_factor": 1.0,
@@ -224,7 +224,7 @@ PARAMS = {
     },
     "PICNIC_BASKET1": {
         "ema_alpha": 0.05,
-        "min_spread": 5,
+        "min_spread": 5 ,
         "volatility_spread_factor": 0.9,
         "inventory_skew_factor": 0.015,
         "base_order_qty": 12,
