@@ -175,26 +175,6 @@ PARAMS = {
         "max_history_length": 110,
         "take_profit_threshold": 0.55
     },
-    "RAINFOREST_RESIN": {
-        "anchor_blend_alpha": 0.19,
-        "fair_value_anchor": 10000.0,
-        "min_spread": 10,
-        "base_order_qty": 25,
-        "reversion_threshold": 1,
-        "inventory_skew_factor": 0.014,
-        "volatility_spread_factor": 0.55
-    },
-    "KELP": {
-        "ema_alpha": 0.13,
-        "imbalance_fv_adjustment_factor": 0.5,
-        "imbalance_depth": 3,
-        "max_volatility_for_qty_reduction": 5.0,
-        "min_volatility_qty_factor": 1.0,
-        "min_spread": 2,
-        "base_order_qty": 27,
-        "inventory_skew_factor": 0.013000000000000001,
-        "volatility_spread_factor": 2.3
-    },
     "CROISSANTS": {
         "ema_alpha": 0.13,
         "imbalance_fv_adjustment_factor": 0.1,
@@ -239,6 +219,24 @@ PARAMS = {
         "base_order_qty": 12,
         "inventory_skew_factor": 0.005,
         "volatility_spread_factor": 0.6
+    },
+    "unknown": {
+        "k_ema": 0.13,
+        "k_imb_adj": 0.5,
+        "k_imb_depth": 3,
+        "k_max_vol": 5.0,
+        "k_min_qty_f": 1.0,
+        "k_min_spread": 2,
+        "k_qty": 27,
+        "k_skew": 0.013000000000000001,
+        "k_vol_spread": 2.3,
+        "rr_alpha": 0.19,
+        "rr_anchor": 10000.0,
+        "rr_min_spread": 10,
+        "rr_qty": 25,
+        "rr_revert": 1,
+        "rr_skew": 0.014,
+        "rr_vol_spread": 0.55
     }
 }
 

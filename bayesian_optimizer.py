@@ -21,14 +21,12 @@ TRADER_FILE_ORIGINAL = "trader.py"
 DATAMODEL_FILE_ORIGINAL = "datamodel.py"
 STORAGE_DB = "sqlite:///prosperity3_round2_optimization.db"
 STUDY_NAME = "prosperity3-round2-optimizer"
-N_TRIALS = 100  
+N_TRIALS = 20  
 ROUNDS_TO_TEST = ["2"]  # Only test Round 2
 PARALLEL_JOBS = 8  # Set to >1 if your system supports parallel execution
 
 # --- Product-Specific Configurations ---
 PRODUCTS = [
-    "RAINFOREST_RESIN", 
-    "KELP",
     "CROISSANTS",
     "JAMS",
     "DJEMBES",
@@ -46,30 +44,6 @@ def define_search_space(trial: optuna.Trial) -> Dict[str, Any]:
             "arbitrage_threshold": trial.suggest_float("shared_arb_threshold", 0.5, 5.0, step=0.1),
             "conversion_threshold": trial.suggest_float("shared_conv_threshold", 0.5, 5.0, step=0.1)
         }
-    }
-    
-    # RAINFOREST_RESIN parameters
-    params["RAINFOREST_RESIN"] = {
-        "fair_value_anchor": trial.suggest_float("rr_anchor", 9800.0, 10200.0, step=10.0),
-        "anchor_blend_alpha": trial.suggest_float("rr_alpha", 0.05, 0.2, step=0.01),
-        "min_spread": trial.suggest_int("rr_min_spread", 5, 10),
-        "volatility_spread_factor": trial.suggest_float("rr_vol_spread", 0.1, 0.6, step=0.05),
-        "inventory_skew_factor": trial.suggest_float("rr_skew", 0.0, 0.03, step=0.002),
-        "base_order_qty": trial.suggest_int("rr_qty", 15, 35, step=1),
-        "reversion_threshold": trial.suggest_int("rr_revert", 1, 8)
-    }
-    
-    # KELP parameters
-    params["KELP"] = {
-        "ema_alpha": trial.suggest_float("k_ema", 0.02, 0.2, step=0.01),
-        "min_spread": trial.suggest_int("k_min_spread", 1, 4),
-        "volatility_spread_factor": trial.suggest_float("k_vol_spread", 0.5, 2.5, step=0.1),
-        "inventory_skew_factor": trial.suggest_float("k_skew", 0.005, 0.03, step=0.001),
-        "base_order_qty": trial.suggest_int("k_qty", 15, 40, step=1),
-        "min_volatility_qty_factor": trial.suggest_float("k_min_qty_f", 1.0, 2.0, step=0.05),
-        "max_volatility_for_qty_reduction": trial.suggest_float("k_max_vol", 2.0, 8.0, step=0.5),
-        "imbalance_depth": trial.suggest_int("k_imb_depth", 3, 7),
-        "imbalance_fv_adjustment_factor": trial.suggest_float("k_imb_adj", 0.2, 0.8, step=0.05)
     }
     
     # CROISSANT parameters
@@ -449,13 +423,11 @@ def main():
 
 def organize_params(flat_params: Dict[str, Any]) -> Dict[str, Any]:
     """Reorganize flat parameter dict into nested structure by product."""
-    organized = {"shared": {}, "RAINFOREST_RESIN": {}, "KELP": {}, "CROISSANTS": {}, "JAMS": {}, 
+    organized = {"shared": {}, "CROISSANTS": {}, "JAMS": {}, 
                 "DJEMBES": {}, "PICNIC_BASKET1": {}, "PICNIC_BASKET2": {}}
     
     prefixes = {
         "shared_": "shared",
-        "rr_": "RAINFOREST_RESIN",
-        "k_": "KELP",
         "c_": "CROISSANTS",
         "j_": "JAMS",
         "d_": "DJEMBES",

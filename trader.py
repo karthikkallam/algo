@@ -175,26 +175,6 @@ PARAMS = {
         "arbitrage_threshold": 1.0,  # Minimum profit to attempt basket arbitrage
         "conversion_threshold": 1.0  # Minimum profit to attempt basket conversion
     },
-    "RAINFOREST_RESIN": {
-        "fair_value_anchor": 10000.0,
-        "anchor_blend_alpha": 0.08,
-        "min_spread": 7,
-        "volatility_spread_factor": 0.32,
-        "inventory_skew_factor": 0.01,
-        "base_order_qty": 25,
-        "reversion_threshold": 2
-    },
-    "KELP": {
-        "ema_alpha": 0.05,
-        "min_spread": 2,
-        "volatility_spread_factor": 1.2,
-        "inventory_skew_factor": 0.015,
-        "base_order_qty": 28,
-        "min_volatility_qty_factor": 1.1,
-        "max_volatility_for_qty_reduction": 4.0,
-        "imbalance_depth": 5,
-        "imbalance_fv_adjustment_factor": 0.36
-    },
     "CROISSANTS": {
         "ema_alpha": 0.1,
         "min_spread": 2,
