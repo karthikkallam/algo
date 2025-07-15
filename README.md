@@ -1,1 +1,1 @@
-Don't clone if you're a random person. thanks!
+Don't clone if you're another competitor. Thanks!
